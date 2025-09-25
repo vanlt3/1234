@@ -1,4 +1,4 @@
-﻿# Standard library imports
+# Standard library imports
 print("🚀 [Bot] Starting imports...")
 
 # ==================================================
@@ -15397,7 +15397,8 @@ class EnhancedTradingBot:
             print(f" [Bot Init] Failed to initialize Data Manager: {e}")
             import traceback
             traceback.print_exc()
-            raise e
+            print("⚠️ [Bot Init] Setting data_manager to None and continuing...")
+            self.data_manager = None
         
         print("🔧 [Bot Init] Initializing other components...")
         try:
@@ -15501,13 +15502,25 @@ class EnhancedTradingBot:
         
         # Initialize Real-time Monitor for SL/TP detection
         print("🔄 [Bot Init] Initializing Real-time Monitor...")
+        print(f"🔍 [Bot Init] Debug - data_manager: {self.data_manager is not None}")
+        print(f"🔍 [Bot Init] Debug - logger: {self.logger is not None}")
+        print(f"🔍 [Bot Init] Debug - ENABLE_REALTIME_MONITORING: {ENABLE_REALTIME_MONITORING}")
+        
         try:
+            if self.data_manager is None:
+                raise ValueError("data_manager is None - cannot initialize RealTimeMonitor")
+            if self.logger is None:
+                raise ValueError("logger is None - cannot initialize RealTimeMonitor")
+            if not ENABLE_REALTIME_MONITORING:
+                raise ValueError("ENABLE_REALTIME_MONITORING is False - skipping initialization")
             self.realtime_monitor = RealTimeMonitor(self.data_manager, self.logger)
             # Set callback để xử lý khi SL/TP bị hit
             self.realtime_monitor.set_position_hit_callback(self._handle_realtime_sl_tp_hit)
             print(" [Bot Init] Real-time Monitor initialized successfully")
         except Exception as e:
             print(f" [Bot Init] Failed to initialize Real-time Monitor: {e}")
+            import traceback
+            traceback.print_exc()
             self.realtime_monitor = None
         
         print(" [Bot Init] EnhancedTradingBot initialization completed successfully!")
@@ -18914,6 +18927,8 @@ class EnhancedTradingBot:
         """Hiển thị trạng thái real-time monitoring"""
         if not hasattr(self, 'realtime_monitor') or not self.realtime_monitor:
             print("⚠️ [Real-time Monitor] Not initialized")
+            print(f"   - Reason: realtime_monitor attribute is {'missing' if not hasattr(self, 'realtime_monitor') else 'None'}")
+            print(f"   - ENABLE_REALTIME_MONITORING: {ENABLE_REALTIME_MONITORING}")
             return
         
         status = self.realtime_monitor.get_monitoring_status()
@@ -20683,6 +20698,7 @@ class EnhancedTradingBot:
                 print("🔄 [Real-time Monitor] No existing positions to monitor")
         else:
             print("❌ [Real-time Monitor] Not initialized")
+            print(f"   - Check initialization logs above for details")
         
         # Hiển thị trạng thái real-time monitoring
         self.display_realtime_monitoring_status()
