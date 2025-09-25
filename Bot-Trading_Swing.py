@@ -15350,6 +15350,9 @@ class EnhancedTradingBot:
     def __init__(self):
         print("🚀 [Bot Init] Starting EnhancedTradingBot initialization...")
         
+        # Initialize logger first
+        self.logger = BOT_LOGGERS.get('BotAnalysis', logging.getLogger('EnhancedTradingBot'))
+        
         # Core trading attributes
         print("🔧 [Bot Init] Setting up core trading attributes...")
         self.active_symbols = set(SYMBOLS)  # Initialize with all symbols from SYMBOLS list
