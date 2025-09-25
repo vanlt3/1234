@@ -50,6 +50,8 @@ SEND_HISTORICAL_SL_ALERTS = False   # Set to True to send Discord alerts for his
 # ===== REAL-TIME MONITORING CONFIGURATION =====
 ENABLE_REALTIME_MONITORING = True   # Enable real-time price monitoring for SL/TP
 REALTIME_CHECK_INTERVAL = 30        # Seconds between real-time price checks
+BOT_CYCLE_MODE = "HOURLY"            # Options: "HOURLY", "CONTINUOUS", "CUSTOM"
+BOT_CYCLE_INTERVAL = 3600            # Seconds between cycles (only used if BOT_CYCLE_MODE = "CUSTOM")
 ENABLE_WICK_DETECTION = True        # Check candle wicks/shadows for SL/TP hits
 WICK_DETECTION_CANDLES = 3          # Number of recent candles to check for wicks
 MAX_REALTIME_RETRIES = 3            # Max retries for real-time price fetching
@@ -1891,7 +1893,11 @@ def safe_cross_val_score(estimator, X, y, cv=5, scoring='f1', n_jobs=None):
 #     tf.config.set_visible_devices([], 'GPU')
 
 GOOGLE_AI_API_KEY = "AIzaSyBCexoODvgrN2QRG8_iKv3p5VTJ5jaJ_B0"
-TRADING_ECONOMICS_API_KEY = "a284ad0cdba547c:p5oyv77j6kovqhv"  # Trading Economics API credentials
+# Trading Economics API credentials
+TRADING_ECONOMICS_API_KEY = "a284ad0cdba547c:p5oyv77j6kovqhv"  
+TRADING_ECONOMICS_LAST_CALL = 0  # Track last API call time for rate limiting
+TRADING_ECONOMICS_CACHE = {}  # Cache for API responses
+TRADING_ECONOMICS_RATE_LIMIT = 60  # Minimum seconds between API calls
 
 # Risk Management Configuration
 RISK_MANAGEMENT = {
@@ -6272,8 +6278,24 @@ class NewsEconomicManager:
                 logging.info("Trading Economics not available - returning empty calendar")
                 return []
 
+            # Add rate limiting before API call
+            import time
+            current_time = time.time()
+            last_call_time = globals().get('TRADING_ECONOMICS_LAST_CALL', 0)
+            rate_limit = globals().get('TRADING_ECONOMICS_RATE_LIMIT', 60)
+            time_since_last_call = current_time - last_call_time
+            
+            if time_since_last_call < rate_limit:
+                wait_time = rate_limit - time_since_last_call
+                logging.info(f"⏱️ Rate limiting: waiting {wait_time:.1f}s before Trading Economics API call")
+                time.sleep(wait_time)
+            
+            # Update last call time
+            globals()['TRADING_ECONOMICS_LAST_CALL'] = time.time()
+
             # Try to get calendar data with additional error handling
             try:
+                logging.info(f"📊 Calling Trading Economics API for calendar data: {init_date} to {end_date}")
                 calendar_raw = te.getCalendarData(initDate=init_date, endDate=end_date)
             except AttributeError as attr_error:
                 if "apikey" in str(attr_error):
@@ -6300,6 +6322,11 @@ class NewsEconomicManager:
                     return []
                 elif "429" in error_msg or "Too Many Requests" in error_msg:
                     logging.warning("⚠️ Trading Economic API rate limited (429) - too many requests")
+                    # Increase rate limit for future calls
+                    current_rate_limit = globals().get('TRADING_ECONOMICS_RATE_LIMIT', 60)
+                    new_rate_limit = min(300, current_rate_limit * 2)  # Max 5 minutes
+                    globals()['TRADING_ECONOMICS_RATE_LIMIT'] = new_rate_limit
+                    logging.info(f"🔄 Increased rate limit to {new_rate_limit}s to prevent future 429 errors")
                     return []
                 else:
                     logging.warning(f"⚠️ Trading Economics API error: {api_error}")
@@ -6828,8 +6855,24 @@ class NewsEconomicManager:
                 logging.info("Trading Economics not available - skipping economic event features")
                 return df
 
-            # Enhanced error handling for Trading Economics API
+            # Enhanced error handling for Trading Economics API with rate limiting
             try:
+                # Add rate limiting before API call
+                import time
+                current_time = time.time()
+                last_call_time = globals().get('TRADING_ECONOMICS_LAST_CALL', 0)
+                rate_limit = globals().get('TRADING_ECONOMICS_RATE_LIMIT', 60)
+                time_since_last_call = current_time - last_call_time
+                
+                if time_since_last_call < rate_limit:
+                    wait_time = rate_limit - time_since_last_call
+                    logging.info(f"⏱️ Rate limiting: waiting {wait_time:.1f}s before Trading Economics API call")
+                    time.sleep(wait_time)
+                
+                # Update last call time
+                globals()['TRADING_ECONOMICS_LAST_CALL'] = time.time()
+                
+                logging.info(f"📊 Calling Trading Economics API for economic events: {start_date} to {end_date}")
                 calendar_raw = te.getCalendarData(initDate=start_date, endDate=end_date)
                 if not isinstance(calendar_raw, list) or not calendar_raw:
                     logging.info("No economic calendar data available for the specified period")
@@ -20781,9 +20824,23 @@ class EnhancedTradingBot:
     async def _handle_timing_logic(self, is_first_run):
         """Handle timing logic for bot execution"""
         if not is_first_run:
-            await self.wait_until_top_of_the_hour()
+            # Check the configured cycle mode
+            cycle_mode = globals().get('BOT_CYCLE_MODE', 'HOURLY')
+            
+            if cycle_mode == "HOURLY":
+                await self.wait_until_top_of_the_hour()
+            elif cycle_mode == "CONTINUOUS":
+                print("🔄 Continuous mode: Starting next cycle immediately...")
+                # No wait - continue immediately
+            elif cycle_mode == "CUSTOM":
+                interval = globals().get('BOT_CYCLE_INTERVAL', 3600)
+                print(f"⏱️ Custom interval mode: Waiting {interval} seconds before next cycle...")
+                await asyncio.sleep(interval)
+            else:
+                # Default to hourly
+                await self.wait_until_top_of_the_hour()
         else:
-            print(" Performing initial analysis run immediately...")
+            print("🚀 Performing initial analysis run immediately...")
 
         current_time_vn = datetime.now(pytz.timezone("Asia/Bangkok"))
         print(f"\n----- Analysis cycle: {current_time_vn.strftime('%Y-%m-%d %H:%M:%S')} (VN) -----")
