@@ -14543,6 +14543,7 @@ class MasterAgent:
         Analyze performance and request model retraining when needed
         """
         try:
+            from datetime import datetime, timedelta
             print(f"🔄 [Master Agent - Retrain Check] Analyzing retraining needs for {symbol}")
             
             retrain_signals = []
@@ -14550,7 +14551,6 @@ class MasterAgent:
             
             # Check specialist agent consistency
             if hasattr(self, 'strategy_selection_history') and self.strategy_selection_history:
-                from datetime import datetime, timedelta
                 recent_decisions = [
                     d for d in self.strategy_selection_history 
                     if d['symbol'] == symbol and d['timestamp'] > datetime.now() - timedelta(days=7)
@@ -18950,11 +18950,11 @@ class EnhancedTradingBot:
                     print(f"     • {symbol}: {pos['signal']} | Entry: {pos['entry_price']:.5f} | SL: {pos['sl']:.5f} | TP: {pos['tp']:.5f}")
         else:
             print("   - No positions being monitored")
-        print(f"   - Check interval: {config['check_interval']}s")
-        print(f"   - Wick detection: {'✅' if config['wick_detection'] else '❌'}")
-        print(f"   - Wick candles: {config['wick_candles']}")
-        print(f"   - Max retries: {config['max_retries']}")
-        print(f"   - Timeout: {config['timeout']}s")
+        print(f"   - Check interval: {REALTIME_CHECK_INTERVAL}s")
+        print(f"   - Wick detection: {'✅' if ENABLE_WICK_DETECTION else '❌'}")
+        print(f"   - Wick candles: {WICK_DETECTION_CANDLES}")
+        print(f"   - Max retries: {MAX_REALTIME_RETRIES}")
+        print(f"   - Timeout: {REALTIME_TIMEOUT}s")
     
     async def test_sl_tp_detection(self, symbol=None):
         """Test SL/TP detection manually for debugging"""
@@ -19095,7 +19095,7 @@ class EnhancedTradingBot:
                     """INSERT INTO trades (symbol, signal, entry_price, exit_price,
                                           closed_at, reason, pips, confidence,
                                           signal_price, execution_slippage_pips, spread_cost_pips)
-                       VALUES (, , , , , , , , , , )""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     trade_data,
                 )
                 self.conn.commit()
