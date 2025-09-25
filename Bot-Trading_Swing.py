@@ -50,6 +50,8 @@ SEND_HISTORICAL_SL_ALERTS = False   # Set to True to send Discord alerts for his
 # ===== REAL-TIME MONITORING CONFIGURATION =====
 ENABLE_REALTIME_MONITORING = True   # Enable real-time price monitoring for SL/TP
 REALTIME_CHECK_INTERVAL = 30        # Seconds between real-time price checks
+BOT_CYCLE_MODE = "HOURLY"            # Options: "HOURLY", "CONTINUOUS", "CUSTOM"
+BOT_CYCLE_INTERVAL = 3600            # Seconds between cycles (only used if BOT_CYCLE_MODE = "CUSTOM")
 ENABLE_WICK_DETECTION = True        # Check candle wicks/shadows for SL/TP hits
 WICK_DETECTION_CANDLES = 3          # Number of recent candles to check for wicks
 MAX_REALTIME_RETRIES = 3            # Max retries for real-time price fetching
@@ -20822,9 +20824,23 @@ class EnhancedTradingBot:
     async def _handle_timing_logic(self, is_first_run):
         """Handle timing logic for bot execution"""
         if not is_first_run:
-            await self.wait_until_top_of_the_hour()
+            # Check the configured cycle mode
+            cycle_mode = globals().get('BOT_CYCLE_MODE', 'HOURLY')
+            
+            if cycle_mode == "HOURLY":
+                await self.wait_until_top_of_the_hour()
+            elif cycle_mode == "CONTINUOUS":
+                print("🔄 Continuous mode: Starting next cycle immediately...")
+                # No wait - continue immediately
+            elif cycle_mode == "CUSTOM":
+                interval = globals().get('BOT_CYCLE_INTERVAL', 3600)
+                print(f"⏱️ Custom interval mode: Waiting {interval} seconds before next cycle...")
+                await asyncio.sleep(interval)
+            else:
+                # Default to hourly
+                await self.wait_until_top_of_the_hour()
         else:
-            print(" Performing initial analysis run immediately...")
+            print("🚀 Performing initial analysis run immediately...")
 
         current_time_vn = datetime.now(pytz.timezone("Asia/Bangkok"))
         print(f"\n----- Analysis cycle: {current_time_vn.strftime('%Y-%m-%d %H:%M:%S')} (VN) -----")
