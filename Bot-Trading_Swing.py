@@ -14092,341 +14092,6 @@ class MasterAgent:
             print(f"❌ [Master Agent] Error generating performance summary: {e}")
             return {"error": str(e)}
 
-class AdvancedEnsembleManager:
-    """Advanced Ensemble System with Bagging, Boosting, v Stacking"""
-    
-    def __init__(self):
-        self.base_models = {}
-        self.meta_model = None
-        self.ensemble_weights = {}
-        self.model_performance = {}
-        self.bagging_models = {}
-        self.boosting_models = {}
-        self.stacking_models = {}
-        
-    def initialize_ensemble_system(self):
-        """Khởi tạo hệ thống ensemble"""
-        # Initialize base models
-        self.base_models = {
-            'random_forest': RandomForestModel(),
-            'gradient_boosting': GradientBoostingModel(),
-            'neural_network': NeuralNetworkModel(),
-            'svm': SVMModel(),
-            'linear_regression': LinearRegressionModel(),
-            'xgboost': XGBoostModel()
-        }
-        
-        # Initialize ensemble techniques
-        self._initialize_bagging()
-        self._initialize_boosting()
-        self._initialize_stacking()
-        
-        # Initialize ensemble weights
-        self._initialize_ensemble_weights()
-    
-    def _initialize_bagging(self):
-        """Khởi tạo Bagging models"""
-        self.bagging_models = {
-            'rf_bagging': RandomForestBagging(),
-            'svm_bagging': SVMBagging(),
-            'nn_bagging': NeuralNetworkBagging()
-        }
-    
-    def _initialize_boosting(self):
-        """Khởi tạo Boosting models"""
-        self.boosting_models = {
-            'ada_boost': AdaBoostModel(),
-            'gradient_boost': GradientBoostingModel(),
-            'xgboost_boost': XGBoostBoosting()
-        }
-    
-    def _initialize_stacking(self):
-        """Khởi tạo Stacking models"""
-        self.stacking_models = {
-            'level1_models': list(self.base_models.keys()),
-            'meta_learner': MetaLearnerModel()
-        }
-    
-    def _initialize_ensemble_weights(self):
-        """Khởi tạo weights cho ensemble"""
-        # Dynamic weights based on performance
-        self.ensemble_weights = {
-            'bagging': 0.3,
-            'boosting': 0.3,
-            'stacking': 0.4
-        }
-    
-    def predict_ensemble(self, data, symbol):
-        """Equal Using ensemble methods"""
-        try:
-            # Get predictions from all ensemble methods
-            bagging_prediction = self._predict_bagging(data, symbol)
-            boosting_prediction = self._predict_boosting(data, symbol)
-            stacking_prediction = self._predict_stacking(data, symbol)
-            
-            # Weighted ensemble prediction
-            final_prediction = self._combine_predictions(
-                bagging_prediction, boosting_prediction, stacking_prediction
-            )
-            
-            return final_prediction
-            
-        except Exception as e:
-            logging.error(f"Error in ensemble prediction: {e}")
-            return "HOLD", 0.5
-    
-    def _predict_bagging(self, data, symbol):
-        """Equal Using Bagging"""
-        try:
-            predictions = []
-            confidences = []
-            
-            for model_name, model in self.bagging_models.items():
-                pred, conf = model.predict(data, symbol)
-                predictions.append(pred)
-                confidences.append(conf)
-            
-            # Majority voting
-            prediction_counts = {}
-            for pred in predictions:
-                prediction_counts[pred] = prediction_counts.get(pred, 0) + 1
-            
-            final_prediction = max(prediction_counts, key=prediction_counts.get)
-            final_confidence = max(confidences) * 0.8  # Bagging typically reduces confidence
-            
-            return final_prediction, final_confidence
-            
-        except Exception as e:
-            logging.error(f"Error in bagging prediction: {e}")
-            return "HOLD", 0.5
-    
-    def _predict_boosting(self, data, symbol):
-        """Equal Using Boosting"""
-        try:
-            predictions = []
-            confidences = []
-            
-            for model_name, model in self.boosting_models.items():
-                pred, conf = model.predict(data, symbol)
-                predictions.append(pred)
-                confidences.append(conf)
-            
-            # Weighted voting based on model performance
-            weighted_votes = {}
-            total_weight = 0
-            
-            for i, (pred, conf) in enumerate(zip(predictions, confidences)):
-                model_name = list(self.boosting_models.keys())[i]
-                weight = conf * self.model_performance.get(model_name, {}).get(symbol, 0.5)
-                
-                if pred not in weighted_votes:
-                    weighted_votes[pred] = 0
-                weighted_votes[pred] += weight
-                total_weight += weight
-            
-            if total_weight > 0:
-                final_prediction = max(weighted_votes, key=weighted_votes.get)
-                final_confidence = weighted_votes[final_prediction] / total_weight
-            else:
-                final_prediction = "HOLD"
-                final_confidence = 0.5
-            
-            return final_prediction, final_confidence
-            
-        except Exception as e:
-            logging.error(f"Error in boosting prediction: {e}")
-            return "HOLD", 0.5
-    
-    def _predict_stacking(self, data, symbol):
-        """Equal Using Stacking"""
-        try:
-            # Level 1: Get predictions from base models
-            level1_predictions = {}
-            level1_confidences = {}
-            
-            for model_name, model in self.base_models.items():
-                pred, conf = model.predict(data, symbol)
-                level1_predictions[model_name] = pred
-                level1_confidences[model_name] = conf
-            
-            # Level 2: Meta-learner combines predictions
-            meta_model = self.stacking_models['meta_learner']
-            final_prediction, final_confidence = meta_model.predict(
-                level1_predictions, level1_confidences, symbol
-            )
-            
-            return final_prediction, final_confidence
-            
-        except Exception as e:
-            logging.error(f"Error in stacking prediction: {e}")
-            return "HOLD", 0.5
-    
-    def _combine_predictions(self, bagging_pred, boosting_pred, stacking_pred):
-        """Combine predictions from all ensemble methods"""
-        try:
-            # Extract predictionfixndonfidences
-            bag_pred, bag_conf = bagging_pred
-            boost_pred, boost_conf = boosting_pred
-            stack_pred, stack_conf = stacking_pred
-            
-            # Weightedombination
-            weights = self.ensemble_weights
-            total_weight = sum(weights.values())
-            
-            weighted_votes = {}
-            weighted_votes[bag_pred] = bag_conf * weights['bagging']
-            weighted_votes[boost_pred] = boost_conf * weights['boosting']
-            weighted_votes[stack_pred] = stack_conf * weights['stacking']
-            
-            # Final prediction
-            final_prediction = max(weighted_votes, key=weighted_votes.get)
-            final_confidence = weighted_votes[final_prediction] / total_weight
-            
-            return final_prediction, final_confidence
-            
-        except Exception as e:
-            logging.error(f"Error combining predictions: {e}")
-            return "HOLD", 0.5
-    
-    def update_model_performance(self, symbol, prediction, actual_outcome):
-        """Update performance of models"""
-        try:
-            # Update individual model performance
-            for model_name in self.base_models.keys():
-                if model_name not in self.model_performance:
-                    self.model_performance[model_name] = {}
-                if symbol not in self.model_performance[model_name]:
-                    self.model_performance[model_name][symbol] = 0.5
-                
-                # Simple performance update (in real implementation, this would be more sophisticated)
-                current_perf = self.model_performance[model_name][symbol]
-                if actual_outcome > 0:  # Positive outcome
-                    new_perf = min(0.95, current_perf + 0.01)
-                else:  # Negative outcome
-                    new_perf = max(0.05, current_perf - 0.01)
-                
-                self.model_performance[model_name][symbol] = new_perf
-            
-            # Update ensemble weights based on performance
-            self._update_ensemble_weights(symbol)
-            
-        except Exception as e:
-            logging.error(f"Error updating model performance: {e}")
-    
-    def _update_ensemble_weights(self, symbol):
-        """Update weights of ensemble methods"""
-        try:
-            # Calculate performance for each ensemble method
-            bagging_perf = self._calculate_method_performance('bagging', symbol)
-            boosting_perf = self._calculate_method_performance('boosting', symbol)
-            stacking_perf = self._calculate_method_performance('stacking', symbol)
-            
-            # Normalize weights
-            total_perf = bagging_perf + boosting_perf + stacking_perf
-            if total_perf > 0:
-                self.ensemble_weights['bagging'] = bagging_perf / total_perf
-                self.ensemble_weights['boosting'] = boosting_perf / total_perf
-                self.ensemble_weights['stacking'] = stacking_perf / total_perf
-            
-        except Exception as e:
-            logging.error(f"Error updating ensemble weights: {e}")
-    
-    def _calculate_method_performance(self, method, symbol):
-        """Calculate performance of an ensemble method"""
-        # Simplified performance calculation
-        return 0.5  # Default performance
-
-# Base Model Classes
-class RandomForestModel:
-    def predict(self, data, symbol):
-        # Simulate Random Forest prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.4, 0.8)
-        return prediction, confidence
-
-class GradientBoostingModel:
-    def predict(self, data, symbol):
-        # Simulate Gradient Boosting prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.5, 0.9)
-        return prediction, confidence
-
-class NeuralNetworkModel:
-    def predict(self, data, symbol):
-        # Simulate Neural Network prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.3, 0.7)
-        return prediction, confidence
-
-class SVMModel:
-    def predict(self, data, symbol):
-        # Simulate SVM prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.4, 0.8)
-        return prediction, confidence
-
-class LinearRegressionModel:
-    def predict(self, data, symbol):
-        # Simulate Linear Regression prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.3, 0.6)
-        return prediction, confidence
-
-class XGBoostModel:
-    def predict(self, data, symbol):
-        # Simulate XGBoost prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.6, 0.9)
-        return prediction, confidence
-
-# Bagging Classes
-class RandomForestBagging:
-    def predict(self, data, symbol):
-        # Simulate Random Forest Bagging
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.5, 0.8)
-        return prediction, confidence
-
-class SVMBagging:
-    def predict(self, data, symbol):
-        # Simulate SVM Bagging
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.4, 0.7)
-        return prediction, confidence
-
-class NeuralNetworkBagging:
-    def predict(self, data, symbol):
-        # Simulate Neural Network Bagging
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.3, 0.6)
-        return prediction, confidence
-
-# Boosting Classes
-class AdaBoostModel:
-    def predict(self, data, symbol):
-        # Simulate AdaBoost prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.5, 0.8)
-        return prediction, confidence
-
-class GradientBoostingModel:
-    def predict(self, data, symbol):
-        # Simulate Gradient Boosting prediction
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.6, 0.9)
-        return prediction, confidence
-
-class XGBoostBoosting:
-    def predict(self, data, symbol):
-        # Simulate XGBoost Boosting
-        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
-        confidence = np.random.uniform(0.7, 0.9)
-        return prediction, confidence
-
-    # =====================================================
-    # ENHANCED MASTER AGENT FEATURES - 7 NEW CAPABILITIES
-    # =====================================================
-    
     async def monitor_and_manage_emergency_stops(self, open_positions, data_manager):
         """
         1. Emergency Stoploss Management
@@ -15338,6 +15003,338 @@ class XGBoostBoosting:
         """Send alert via email (placeholder)"""
         # Implementation would use SMTP
         pass
+
+class AdvancedEnsembleManager:
+    """Advanced Ensemble System with Bagging, Boosting, v Stacking"""
+    
+    def __init__(self):
+        self.base_models = {}
+        self.meta_model = None
+        self.ensemble_weights = {}
+        self.model_performance = {}
+        self.bagging_models = {}
+        self.boosting_models = {}
+        self.stacking_models = {}
+        
+    def initialize_ensemble_system(self):
+        """Khởi tạo hệ thống ensemble"""
+        # Initialize base models
+        self.base_models = {
+            'random_forest': RandomForestModel(),
+            'gradient_boosting': GradientBoostingModel(),
+            'neural_network': NeuralNetworkModel(),
+            'svm': SVMModel(),
+            'linear_regression': LinearRegressionModel(),
+            'xgboost': XGBoostModel()
+        }
+        
+        # Initialize ensemble techniques
+        self._initialize_bagging()
+        self._initialize_boosting()
+        self._initialize_stacking()
+        
+        # Initialize ensemble weights
+        self._initialize_ensemble_weights()
+    
+    def _initialize_bagging(self):
+        """Khởi tạo Bagging models"""
+        self.bagging_models = {
+            'rf_bagging': RandomForestBagging(),
+            'svm_bagging': SVMBagging(),
+            'nn_bagging': NeuralNetworkBagging()
+        }
+    
+    def _initialize_boosting(self):
+        """Khởi tạo Boosting models"""
+        self.boosting_models = {
+            'ada_boost': AdaBoostModel(),
+            'gradient_boost': GradientBoostingModel(),
+            'xgboost_boost': XGBoostBoosting()
+        }
+    
+    def _initialize_stacking(self):
+        """Khởi tạo Stacking models"""
+        self.stacking_models = {
+            'level1_models': list(self.base_models.keys()),
+            'meta_learner': MetaLearnerModel()
+        }
+    
+    def _initialize_ensemble_weights(self):
+        """Khởi tạo weights cho ensemble"""
+        # Dynamic weights based on performance
+        self.ensemble_weights = {
+            'bagging': 0.3,
+            'boosting': 0.3,
+            'stacking': 0.4
+        }
+    
+    def predict_ensemble(self, data, symbol):
+        """Equal Using ensemble methods"""
+        try:
+            # Get predictions from all ensemble methods
+            bagging_prediction = self._predict_bagging(data, symbol)
+            boosting_prediction = self._predict_boosting(data, symbol)
+            stacking_prediction = self._predict_stacking(data, symbol)
+            
+            # Weighted ensemble prediction
+            final_prediction = self._combine_predictions(
+                bagging_prediction, boosting_prediction, stacking_prediction
+            )
+            
+            return final_prediction
+            
+        except Exception as e:
+            logging.error(f"Error in ensemble prediction: {e}")
+            return "HOLD", 0.5
+    
+    def _predict_bagging(self, data, symbol):
+        """Equal Using Bagging"""
+        try:
+            predictions = []
+            confidences = []
+            
+            for model_name, model in self.bagging_models.items():
+                pred, conf = model.predict(data, symbol)
+                predictions.append(pred)
+                confidences.append(conf)
+            
+            # Majority voting
+            prediction_counts = {}
+            for pred in predictions:
+                prediction_counts[pred] = prediction_counts.get(pred, 0) + 1
+            
+            final_prediction = max(prediction_counts, key=prediction_counts.get)
+            final_confidence = max(confidences) * 0.8  # Bagging typically reduces confidence
+            
+            return final_prediction, final_confidence
+            
+        except Exception as e:
+            logging.error(f"Error in bagging prediction: {e}")
+            return "HOLD", 0.5
+    
+    def _predict_boosting(self, data, symbol):
+        """Equal Using Boosting"""
+        try:
+            predictions = []
+            confidences = []
+            
+            for model_name, model in self.boosting_models.items():
+                pred, conf = model.predict(data, symbol)
+                predictions.append(pred)
+                confidences.append(conf)
+            
+            # Weighted voting based on model performance
+            weighted_votes = {}
+            total_weight = 0
+            
+            for i, (pred, conf) in enumerate(zip(predictions, confidences)):
+                model_name = list(self.boosting_models.keys())[i]
+                weight = conf * self.model_performance.get(model_name, {}).get(symbol, 0.5)
+                
+                if pred not in weighted_votes:
+                    weighted_votes[pred] = 0
+                weighted_votes[pred] += weight
+                total_weight += weight
+            
+            if total_weight > 0:
+                final_prediction = max(weighted_votes, key=weighted_votes.get)
+                final_confidence = weighted_votes[final_prediction] / total_weight
+            else:
+                final_prediction = "HOLD"
+                final_confidence = 0.5
+            
+            return final_prediction, final_confidence
+            
+        except Exception as e:
+            logging.error(f"Error in boosting prediction: {e}")
+            return "HOLD", 0.5
+    
+    def _predict_stacking(self, data, symbol):
+        """Equal Using Stacking"""
+        try:
+            # Level 1: Get predictions from base models
+            level1_predictions = {}
+            level1_confidences = {}
+            
+            for model_name, model in self.base_models.items():
+                pred, conf = model.predict(data, symbol)
+                level1_predictions[model_name] = pred
+                level1_confidences[model_name] = conf
+            
+            # Level 2: Meta-learner combines predictions
+            meta_model = self.stacking_models['meta_learner']
+            final_prediction, final_confidence = meta_model.predict(
+                level1_predictions, level1_confidences, symbol
+            )
+            
+            return final_prediction, final_confidence
+            
+        except Exception as e:
+            logging.error(f"Error in stacking prediction: {e}")
+            return "HOLD", 0.5
+    
+    def _combine_predictions(self, bagging_pred, boosting_pred, stacking_pred):
+        """Combine predictions from all ensemble methods"""
+        try:
+            # Extract predictionfixndonfidences
+            bag_pred, bag_conf = bagging_pred
+            boost_pred, boost_conf = boosting_pred
+            stack_pred, stack_conf = stacking_pred
+            
+            # Weightedombination
+            weights = self.ensemble_weights
+            total_weight = sum(weights.values())
+            
+            weighted_votes = {}
+            weighted_votes[bag_pred] = bag_conf * weights['bagging']
+            weighted_votes[boost_pred] = boost_conf * weights['boosting']
+            weighted_votes[stack_pred] = stack_conf * weights['stacking']
+            
+            # Final prediction
+            final_prediction = max(weighted_votes, key=weighted_votes.get)
+            final_confidence = weighted_votes[final_prediction] / total_weight
+            
+            return final_prediction, final_confidence
+            
+        except Exception as e:
+            logging.error(f"Error combining predictions: {e}")
+            return "HOLD", 0.5
+    
+    def update_model_performance(self, symbol, prediction, actual_outcome):
+        """Update performance of models"""
+        try:
+            # Update individual model performance
+            for model_name in self.base_models.keys():
+                if model_name not in self.model_performance:
+                    self.model_performance[model_name] = {}
+                if symbol not in self.model_performance[model_name]:
+                    self.model_performance[model_name][symbol] = 0.5
+                
+                # Simple performance update (in real implementation, this would be more sophisticated)
+                current_perf = self.model_performance[model_name][symbol]
+                if actual_outcome > 0:  # Positive outcome
+                    new_perf = min(0.95, current_perf + 0.01)
+                else:  # Negative outcome
+                    new_perf = max(0.05, current_perf - 0.01)
+                
+                self.model_performance[model_name][symbol] = new_perf
+            
+            # Update ensemble weights based on performance
+            self._update_ensemble_weights(symbol)
+            
+        except Exception as e:
+            logging.error(f"Error updating model performance: {e}")
+    
+    def _update_ensemble_weights(self, symbol):
+        """Update weights of ensemble methods"""
+        try:
+            # Calculate performance for each ensemble method
+            bagging_perf = self._calculate_method_performance('bagging', symbol)
+            boosting_perf = self._calculate_method_performance('boosting', symbol)
+            stacking_perf = self._calculate_method_performance('stacking', symbol)
+            
+            # Normalize weights
+            total_perf = bagging_perf + boosting_perf + stacking_perf
+            if total_perf > 0:
+                self.ensemble_weights['bagging'] = bagging_perf / total_perf
+                self.ensemble_weights['boosting'] = boosting_perf / total_perf
+                self.ensemble_weights['stacking'] = stacking_perf / total_perf
+            
+        except Exception as e:
+            logging.error(f"Error updating ensemble weights: {e}")
+    
+    def _calculate_method_performance(self, method, symbol):
+        """Calculate performance of an ensemble method"""
+        # Simplified performance calculation
+        return 0.5  # Default performance
+
+# Base Model Classes
+class RandomForestModel:
+    def predict(self, data, symbol):
+        # Simulate Random Forest prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.4, 0.8)
+        return prediction, confidence
+
+class GradientBoostingModel:
+    def predict(self, data, symbol):
+        # Simulate Gradient Boosting prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.5, 0.9)
+        return prediction, confidence
+
+class NeuralNetworkModel:
+    def predict(self, data, symbol):
+        # Simulate Neural Network prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.3, 0.7)
+        return prediction, confidence
+
+class SVMModel:
+    def predict(self, data, symbol):
+        # Simulate SVM prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.4, 0.8)
+        return prediction, confidence
+
+class LinearRegressionModel:
+    def predict(self, data, symbol):
+        # Simulate Linear Regression prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.3, 0.6)
+        return prediction, confidence
+
+class XGBoostModel:
+    def predict(self, data, symbol):
+        # Simulate XGBoost prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.6, 0.9)
+        return prediction, confidence
+
+# Bagging Classes
+class RandomForestBagging:
+    def predict(self, data, symbol):
+        # Simulate Random Forest Bagging
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.5, 0.8)
+        return prediction, confidence
+
+class SVMBagging:
+    def predict(self, data, symbol):
+        # Simulate SVM Bagging
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.4, 0.7)
+        return prediction, confidence
+
+class NeuralNetworkBagging:
+    def predict(self, data, symbol):
+        # Simulate Neural Network Bagging
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.3, 0.6)
+        return prediction, confidence
+
+# Boosting Classes
+class AdaBoostModel:
+    def predict(self, data, symbol):
+        # Simulate AdaBoost prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.5, 0.8)
+        return prediction, confidence
+
+class GradientBoostingModel:
+    def predict(self, data, symbol):
+        # Simulate Gradient Boosting prediction
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.6, 0.9)
+        return prediction, confidence
+
+class XGBoostBoosting:
+    def predict(self, data, symbol):
+        # Simulate XGBoost Boosting
+        prediction = np.random.choice(['BUY', 'SELL', 'HOLD'])
+        confidence = np.random.uniform(0.7, 0.9)
+        return prediction, confidence
+
 
 # Stacking Classes
 class MetaLearnerModel:
