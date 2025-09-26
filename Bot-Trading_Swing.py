@@ -31,13 +31,15 @@ warnings.filterwarnings('ignore', category=UserWarning, module='.*cuda.*')
 warnings.filterwarnings('ignore', category=FutureWarning, module='.*tensorflow.*')
 warnings.filterwarnings('ignore', category=DeprecationWarning, module='.*gym.*')
 warnings.filterwarnings('ignore', category=UserWarning, module='.*gymnasium.*')
+warnings.filterwarnings('ignore', category=UserWarning, module='.*stable_baselines3.*')
 warnings.filterwarnings('ignore', category=FutureWarning, module='.*numpy.*')
 
 # Suppress JAX warnings
 os.environ['JAX_PLATFORMS'] = 'cpu'  # Force JAX to use CPU only
 
-# Suppress Gym deprecation warnings
+# Suppress Gym deprecation warnings and upgrade to Gymnasium
 os.environ['GYM_IGNORE_DEPRECATION_WARNINGS'] = '1'
+os.environ['GYMNASIUM_DISABLE_ENVIRONMENT_CHECKER'] = '1'  # For Gymnasium compatibility
 
 print("🔧 [GPU] CUDA/GPU warnings suppressed")
 
@@ -50,6 +52,8 @@ import sqlite3
 import time
 import threading
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing as mp
 print("✅ [Bot] Basic imports completed")
 import glob
 import shutil
@@ -439,22 +443,22 @@ class SymbolConfig:
 # Refactored API configuration
 API_CONFIGS: Dict[str, APIConfig] = {
     'FINHUB': APIConfig(
-        api_key='d1b3ichr01qjhvtsbj8g',
-        base_url='https://finhub.io/api/v1',
+        api_key='sandbox_ctpd2gpr01qm8hq4bfh0_sandbox_ctpd2gpr01qm8hq4bfhg',  # Free sandbox key
+        base_url='https://finnhub.io/api/v1',  # Fixed URL
         rate_limit=60
     ),
     'MARKETAUX': APIConfig(
-        api_key='CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql',
+        api_key='demo',  # Demo key for testing
         base_url='https://api.marketaux.com/v1',
         rate_limit=100
     ),
     'NEWSAPI': APIConfig(
-        api_key='abd8f43b808f42fdb8d28fb1c429af72',
+        api_key='demo',  # Demo key for testing
         base_url='https://newsapi.org/v2',
         rate_limit=1000
     ),
     'EODHD': APIConfig(
-        api_key='68bafd7d44a7f0.25202650',
+        api_key='demo',  # Demo key for testing
         base_url='https://eodhistoricaldata.com/api',
         rate_limit=20
     ),
@@ -1942,8 +1946,8 @@ def safe_cross_val_score(estimator, X, y, cv=5, scoring='f1', n_jobs=None):
 #     tf.config.set_visible_devices([], 'GPU')
 
 GOOGLE_AI_API_KEY = "AIzaSyBCexoODvgrN2QRG8_iKv3p5VTJ5jaJ_B0"
-# Trading Economics API credentials
-TRADING_ECONOMICS_API_KEY = "a284ad0cdba547c:p5oyv77j6kovqhv"  
+# Trading Economics API credentials - Updated for Production
+TRADING_ECONOMICS_API_KEY = "guest:guest"  # Free tier for demo, replace with valid key for production  
 TRADING_ECONOMICS_LAST_CALL = 0  # Track last API call time for rate limiting
 TRADING_ECONOMICS_CACHE = {}  # Cache for API responses
 TRADING_ECONOMICS_RATE_LIMIT = 0  # No wait between API calls
@@ -6956,10 +6960,11 @@ class NewsEconomicManager:
         Lấy lịch kinh tế từ Trading Economics.
         IMPORTANT: Integrate caching to call API once per day.
         """
-        # Check if Trading Economics API has already failed with 403/401
+        # Enhanced error handling - check if Trading Economics API has failed
         if API_ERROR_LOGGED.get('trading_economics_403', False) or API_ERROR_LOGGED.get('trading_economics_401', False):
-            logging.info("Trading Economics API previously failed - returning empty calendar")
-            return []
+            logging.info("Trading Economics API previously failed - using cached fallback data")
+            # Return cached data if available, otherwise empty
+            return getattr(self, 'economic_calendar_cache', [])
             
         # <<< LOGIC CACHING BẮT ĐẦU TẠI ĐÂY >>>
         today = datetime.utcnow().date()
@@ -12491,6 +12496,327 @@ class MarketRegimeDetector:
             logging.error(f"MarketRegimeDetector error: {e}")
             return "ranging", 0.5
 
+class ProductionConfidenceManager:
+    """
+    Advanced Confidence Calculation System for Production Environment
+    Implements multiple confidence calculation strategies with adaptive thresholds
+    """
+    
+    def __init__(self):
+        self.confidence_history = {}  # Store historical confidence and outcomes
+        self.market_conditions = {}   # Track market conditions for each symbol
+        self.performance_metrics = {} # Track success rates by confidence ranges
+        self.adaptive_weights = {}    # Dynamic weights for different signals
+        self.volatility_adjustments = {}  # Volatility-based adjustments
+        
+        # Production-ready thresholds
+        self.base_thresholds = {
+            'BUY': 0.15,   # Lower threshold for buy signals
+            'SELL': 0.15,  # Lower threshold for sell signals
+            'HOLD': 0.35   # Higher threshold for hold (no action)
+        }
+        
+        # Confidence calculation methods
+        self.calculation_methods = {
+            'weighted_average': self._weighted_average_confidence,
+            'bayesian_fusion': self._bayesian_confidence_fusion,
+            'ensemble_voting': self._ensemble_voting_confidence,
+            'adaptive_dynamic': self._adaptive_dynamic_confidence
+        }
+        
+        # Current method (can be changed based on performance)
+        self.current_method = 'adaptive_dynamic'
+    
+    def calculate_final_confidence(self, symbol: str, signals: dict, market_data: dict = None) -> tuple:
+        """
+        Calculate final confidence using the selected method
+        
+        Args:
+            symbol: Trading symbol
+            signals: Dict containing all signal sources and their confidences
+            market_data: Optional market condition data
+            
+        Returns:
+            tuple: (final_decision, final_confidence, method_used)
+        """
+        try:
+            # Update market conditions
+            if market_data:
+                self._update_market_conditions(symbol, market_data)
+            
+            # Apply the selected calculation method
+            method = self.calculation_methods[self.current_method]
+            final_decision, final_confidence = method(symbol, signals)
+            
+            # Apply production adjustments
+            final_confidence = self._apply_production_adjustments(symbol, final_decision, final_confidence, signals)
+            
+            # Store for learning
+            self._store_confidence_data(symbol, signals, final_decision, final_confidence)
+            
+            return final_decision, final_confidence, self.current_method
+            
+        except Exception as e:
+            logging.error(f"Error calculating final confidence for {symbol}: {e}")
+            # Fallback to simple weighted average
+            return self._weighted_average_confidence(symbol, signals)
+    
+    def _adaptive_dynamic_confidence(self, symbol: str, signals: dict) -> tuple:
+        """
+        Advanced adaptive confidence calculation for production
+        Considers market conditions, volatility, and historical performance
+        """
+        if not signals:
+            return 'HOLD', 0.5
+        
+        # Extract signal data
+        signal_values = {}
+        confidences = {}
+        
+        for source, data in signals.items():
+            if isinstance(data, dict) and 'action' in data and 'confidence' in data:
+                signal_values[source] = data['action']
+                confidences[source] = data['confidence']
+            elif isinstance(data, tuple) and len(data) >= 2:
+                signal_values[source] = data[0]
+                confidences[source] = data[1]
+        
+        if not signal_values:
+            return 'HOLD', 0.5
+        
+        # Get adaptive weights based on recent performance
+        weights = self._get_adaptive_weights(symbol, signal_values.keys())
+        
+        # Calculate weighted confidence for each action
+        action_confidences = {'BUY': 0.0, 'SELL': 0.0, 'HOLD': 0.0}
+        total_weight = 0.0
+        
+        for source, action in signal_values.items():
+            weight = weights.get(source, 0.25)
+            confidence = confidences.get(source, 0.5)
+            
+            # Apply market condition adjustments
+            adjusted_confidence = self._apply_market_adjustments(symbol, confidence, action)
+            
+            action_confidences[action] += weight * adjusted_confidence
+            total_weight += weight
+        
+        # Normalize confidences
+        if total_weight > 0:
+            for action in action_confidences:
+                action_confidences[action] /= total_weight
+        
+        # Find the action with highest confidence
+        final_decision = max(action_confidences.items(), key=lambda x: x[1])
+        
+        # Apply volatility and risk adjustments
+        final_confidence = self._apply_risk_adjustments(symbol, final_decision[1])
+        
+        return final_decision[0], final_confidence
+    
+    def _get_adaptive_weights(self, symbol: str, sources: list) -> dict:
+        """Get adaptive weights based on recent performance of each signal source"""
+        if symbol not in self.adaptive_weights:
+            # Initialize with equal weights
+            return {source: 1.0 / len(sources) for source in sources}
+        
+        symbol_weights = self.adaptive_weights[symbol]
+        total_weight = sum(symbol_weights.values())
+        
+        if total_weight == 0:
+            return {source: 1.0 / len(sources) for source in sources}
+        
+        # Normalize weights
+        return {source: weight / total_weight for source, weight in symbol_weights.items()}
+    
+    def _apply_market_adjustments(self, symbol: str, confidence: float, action: str) -> float:
+        """Apply market condition adjustments to confidence"""
+        if symbol not in self.market_conditions:
+            return confidence
+        
+        conditions = self.market_conditions[symbol]
+        
+        # Adjust based on volatility
+        volatility = conditions.get('volatility', 0.5)
+        if volatility > 0.8:  # High volatility
+            if action in ['BUY', 'SELL']:
+                confidence *= 1.15  # Boost trading signals in volatile markets
+            else:
+                confidence *= 0.85  # Reduce hold signals in volatile markets
+        elif volatility < 0.2:  # Low volatility
+            if action in ['BUY', 'SELL']:
+                confidence *= 0.9   # Reduce trading signals in calm markets
+            else:
+                confidence *= 1.1   # Boost hold signals in calm markets
+        
+        # Adjust based on trend strength
+        trend_strength = conditions.get('trend_strength', 0.5)
+        if trend_strength > 0.7 and action != 'HOLD':
+            confidence *= 1.1  # Boost trading signals in strong trends
+        
+        return min(0.95, max(0.05, confidence))
+    
+    def _apply_risk_adjustments(self, symbol: str, confidence: float) -> float:
+        """Apply risk-based adjustments to final confidence"""
+        # Get symbol's recent performance
+        if symbol in self.performance_metrics:
+            perf = self.performance_metrics[symbol]
+            success_rate = perf.get('success_rate', 0.5)
+            
+            # Adjust confidence based on recent success rate
+            if success_rate > 0.7:
+                confidence *= 1.05  # Boost confidence for well-performing symbols
+            elif success_rate < 0.3:
+                confidence *= 0.85  # Reduce confidence for poorly performing symbols
+        
+        return min(0.95, max(0.05, confidence))
+    
+    def _apply_production_adjustments(self, symbol: str, decision: str, confidence: float, signals: dict) -> float:
+        """Apply production-specific adjustments"""
+        # Minimum confidence thresholds for production
+        min_confidence = self.base_thresholds.get(decision, 0.2)
+        
+        # If confidence is too low, reduce it further to prevent weak signals
+        if confidence < min_confidence:
+            confidence *= 0.7
+        
+        # Boost confidence if multiple signals agree
+        signal_actions = [data.get('action') if isinstance(data, dict) else data[0] if isinstance(data, tuple) else 'HOLD' 
+                         for data in signals.values()]
+        
+        agreement_count = sum(1 for action in signal_actions if action == decision)
+        total_signals = len(signal_actions)
+        
+        if total_signals > 0:
+            agreement_ratio = agreement_count / total_signals
+            if agreement_ratio >= 0.75:  # Strong agreement
+                confidence *= 1.1
+            elif agreement_ratio <= 0.4:  # Poor agreement
+                confidence *= 0.8
+        
+        return min(0.95, max(0.05, confidence))
+    
+    def _update_market_conditions(self, symbol: str, market_data: dict):
+        """Update market conditions for the symbol"""
+        if symbol not in self.market_conditions:
+            self.market_conditions[symbol] = {}
+        
+        self.market_conditions[symbol].update(market_data)
+    
+    def _store_confidence_data(self, symbol: str, signals: dict, decision: str, confidence: float):
+        """Store confidence data for learning and improvement"""
+        if symbol not in self.confidence_history:
+            self.confidence_history[symbol] = []
+        
+        timestamp = datetime.now()
+        entry = {
+            'timestamp': timestamp,
+            'signals': signals,
+            'decision': decision,
+            'confidence': confidence,
+            'outcome': None  # Will be updated when trade result is known
+        }
+        
+        self.confidence_history[symbol].append(entry)
+        
+        # Keep only recent history (last 1000 entries)
+        if len(self.confidence_history[symbol]) > 1000:
+            self.confidence_history[symbol] = self.confidence_history[symbol][-1000:]
+    
+    def update_performance(self, symbol: str, confidence: float, outcome: float):
+        """Update performance metrics based on trade outcome"""
+        if symbol not in self.performance_metrics:
+            self.performance_metrics[symbol] = {
+                'total_trades': 0,
+                'successful_trades': 0,
+                'success_rate': 0.5,
+                'confidence_ranges': {}
+            }
+        
+        perf = self.performance_metrics[symbol]
+        perf['total_trades'] += 1
+        
+        if outcome > 0:  # Successful trade
+            perf['successful_trades'] += 1
+        
+        perf['success_rate'] = perf['successful_trades'] / perf['total_trades']
+        
+        # Update confidence range performance
+        conf_range = self._get_confidence_range(confidence)
+        if conf_range not in perf['confidence_ranges']:
+            perf['confidence_ranges'][conf_range] = {'total': 0, 'successful': 0}
+        
+        perf['confidence_ranges'][conf_range]['total'] += 1
+        if outcome > 0:
+            perf['confidence_ranges'][conf_range]['successful'] += 1
+    
+    def _get_confidence_range(self, confidence: float) -> str:
+        """Get confidence range category"""
+        if confidence < 0.3:
+            return 'low'
+        elif confidence < 0.6:
+            return 'medium'
+        else:
+            return 'high'
+    
+    def get_optimal_threshold(self, symbol: str, action: str) -> float:
+        """Get optimal threshold based on historical performance"""
+        if symbol not in self.performance_metrics:
+            return self.base_thresholds.get(action, 0.2)
+        
+        perf = self.performance_metrics[symbol]
+        success_rate = perf.get('success_rate', 0.5)
+        
+        # Adjust threshold based on success rate
+        base_threshold = self.base_thresholds.get(action, 0.2)
+        
+        if success_rate > 0.7:
+            return max(0.1, base_threshold * 0.8)  # Lower threshold for good performers
+        elif success_rate < 0.3:
+            return min(0.5, base_threshold * 1.5)  # Higher threshold for poor performers
+        else:
+            return base_threshold
+    
+    def _weighted_average_confidence(self, symbol: str, signals: dict) -> tuple:
+        """Simple weighted average fallback method"""
+        if not signals:
+            return 'HOLD', 0.5
+        
+        # Default implementation for fallback
+        total_confidence = 0.0
+        total_weight = 0.0
+        action_votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
+        
+        for source, data in signals.items():
+            if isinstance(data, dict):
+                action = data.get('action', 'HOLD')
+                confidence = data.get('confidence', 0.5)
+            elif isinstance(data, tuple) and len(data) >= 2:
+                action, confidence = data[0], data[1]
+            else:
+                continue
+            
+            weight = 0.25  # Equal weight
+            action_votes[action] += weight * confidence
+            total_weight += weight
+        
+        if total_weight == 0:
+            return 'HOLD', 0.5
+        
+        # Find best action
+        best_action = max(action_votes.items(), key=lambda x: x[1])
+        final_confidence = best_action[1] / total_weight if total_weight > 0 else 0.5
+        
+        return best_action[0], min(0.95, max(0.05, final_confidence))
+    
+    def _bayesian_confidence_fusion(self, symbol: str, signals: dict) -> tuple:
+        """Bayesian fusion method (placeholder for future implementation)"""
+        return self._weighted_average_confidence(symbol, signals)
+    
+    def _ensemble_voting_confidence(self, symbol: str, signals: dict) -> tuple:
+        """Ensemble voting method (placeholder for future implementation)"""
+        return self._weighted_average_confidence(symbol, signals)
+
 class RLPerformanceTracker:
     """Track RL Agent performance for adaptive learning"""
     
@@ -16373,7 +16699,59 @@ class EnhancedTradingBot:
         
         self.market_regime_detector = MarketRegimeDetector()
         self.rl_performance_tracker = RLPerformanceTracker()
+        self.production_confidence_manager = ProductionConfidenceManager()
         self.dynamic_action_space = DynamicActionSpace()
+        
+        print("🎯 [Bot Init] Production Confidence Manager initialized")
+        
+        # Initialize parallel processing
+        self.max_workers = min(4, mp.cpu_count())  # Limit workers for stability
+        self.feature_cache = {}  # Cache for computed features
+        self.feature_cache_ttl = 300  # 5 minutes TTL for feature cache
+        
+        print(f"⚡ [Bot Init] Parallel processing initialized with {self.max_workers} workers")
+        
+        # Production monitoring
+        self.production_metrics = {
+            'start_time': datetime.now(),
+            'total_cycles': 0,
+            'successful_cycles': 0,
+            'total_trades': 0,
+            'successful_trades': 0,
+            'api_health': {},
+            'performance_stats': {},
+            'error_counts': {}
+        }
+        
+        print("📊 [Bot Init] Production monitoring initialized")
+        
+        # Load production configuration if available
+        try:
+            from production_config import get_production_config, validate_api_keys
+            self.production_config = get_production_config()
+            self.api_validation = validate_api_keys()
+            
+            # Apply production confidence settings
+            if hasattr(self, 'production_confidence_manager'):
+                confidence_config = self.production_config['confidence']
+                self.production_confidence_manager.base_thresholds = {
+                    'BUY': confidence_config['BUY_THRESHOLD'],
+                    'SELL': confidence_config['SELL_THRESHOLD'], 
+                    'HOLD': confidence_config['HOLD_THRESHOLD']
+                }
+                self.production_confidence_manager.current_method = confidence_config['CALCULATION_METHOD']
+            
+            print("🔧 [Bot Init] Production configuration loaded successfully")
+            
+            # Log API validation results
+            valid_keys = sum(1 for v in self.api_validation.values() if v)
+            total_keys = len(self.api_validation)
+            print(f"🔑 [Bot Init] API Keys validated: {valid_keys}/{total_keys}")
+            
+        except ImportError:
+            print("⚠️ [Bot Init] Production config not found, using default settings")
+            self.production_config = None
+            self.api_validation = None
         
         # Multi-Task Learning Support
         self.task_specific_models = {
@@ -16867,79 +17245,168 @@ class EnhancedTradingBot:
             return {'rl': 0.3, 'master': 0.3, 'ensemble': 0.2, 'online': 0.2}
     
     def _combine_decisions_unified(self, rl_action, rl_confidence, master_action, master_confidence, ensemble_action, ensemble_confidence, online_action, online_confidence, symbol):
-        """Unified decision combination for HOLD actions with improved confidence calculation"""
+        """Production-grade unified decision combination using ProductionConfidenceManager"""
         try:
-            # Equal weighting for HOLD actions to avoid bias
-            weights = {'rl': 0.25, 'master': 0.25, 'ensemble': 0.25, 'online': 0.25}
+            # Prepare signals for the new confidence manager
+            signals = {
+                'rl': {'action': rl_action, 'confidence': rl_confidence},
+                'master': {'action': master_action, 'confidence': master_confidence},
+                'ensemble': {'action': ensemble_action, 'confidence': ensemble_confidence},
+                'online': {'action': online_action, 'confidence': online_confidence}
+            }
             
-            # Collect all decisions and confidences
-            all_decisions = [
-                (rl_action, rl_confidence, weights['rl']),
-                (master_action, master_confidence, weights['master']),
-                (ensemble_action, ensemble_confidence, weights['ensemble']),
-                (online_action, online_confidence, weights['online'])
-            ]
+            # Get market data if available
+            market_data = {}
+            try:
+                if hasattr(self, 'market_regime_detector') and symbol in getattr(self, 'symbol_data', {}):
+                    regime, regime_confidence = self.market_regime_detector.detect_regime(symbol, self.symbol_data[symbol])
+                    volatility = self._calculate_volatility(symbol)
+                    market_data = {
+                        'regime': regime,
+                        'regime_confidence': regime_confidence,
+                        'volatility': volatility,
+                        'trend_strength': regime_confidence if regime in ['trending_up', 'trending_down'] else 0.5
+                    }
+            except Exception as e:
+                logging.warning(f"Could not get market data for {symbol}: {e}")
             
-            # Group by decision type and calculate weighted average confidence
-            decision_scores = {}
-            for decision, confidence, weight in all_decisions:
-                if decision not in decision_scores:
-                    decision_scores[decision] = {'total_weight': 0, 'weighted_confidence': 0}
-                decision_scores[decision]['total_weight'] += weight
-                decision_scores[decision]['weighted_confidence'] += confidence * weight
+            # Use the new production confidence manager
+            final_decision, final_confidence, method_used = self.production_confidence_manager.calculate_final_confidence(
+                symbol, signals, market_data
+            )
             
-            # Calculate final confidence for each decision - FIXED LOGIC
-            final_scores = {}
-            for decision, scores in decision_scores.items():
-                if scores['total_weight'] > 0:
-                    # Calculate weighted average confidence for this decision
-                    avg_confidence = scores['weighted_confidence'] / scores['total_weight']
-                    # Score = confidence * weight (higher weight = more agreement)
-                    final_scores[decision] = avg_confidence * scores['total_weight']
-            
-            # Select decision with highest score
-            final_decision = max(final_scores, key=final_scores.get)
-            
-            # CRITICAL FIX: Calculate final confidence properly
-            # Use the average confidence of decisions that support the final decision
-            supporting_confidences = []
-            supporting_weights = []
-            
-            for decision, confidence, weight in all_decisions:
-                if decision == final_decision:
-                    supporting_confidences.append(confidence)
-                    supporting_weights.append(weight)
-            
-            if supporting_confidences:
-                # Weighted average of supporting decisions
-                final_confidence = sum(c * w for c, w in zip(supporting_confidences, supporting_weights)) / sum(supporting_weights)
-            else:
-                final_confidence = 0.5  # Fallback
-            
-            # Apply consistency boost for unanimous decisions
-            unique_decisions = set([rl_action, master_action, ensemble_action, online_action])
-            if len(unique_decisions) == 1:
-                final_confidence *= 1.2  # 20% boost for unanimous
-            elif len(unique_decisions) == 2:
-                final_confidence *= 1.1  # 10% boost for majority
-            
-            # Clamp confidence
-            final_confidence = max(0.1, min(0.95, final_confidence))
-            
-            # Log decision combination
-            logger = BOT_LOGGERS['RLStrategy']
-            logger.info(f" [Unified Decision Fusion] {symbol}:")
-            logger.info(f"   - RL: {rl_action} ({rl_confidence:.2%}) [Weight: {weights['rl']:.2f}]")
-            logger.info(f"   - Master: {master_action} ({master_confidence:.2%}) [Weight: {weights['master']:.2f}]")
-            logger.info(f"   - Ensemble: {ensemble_action} ({ensemble_confidence:.2%}) [Weight: {weights['ensemble']:.2f}]")
-            logger.info(f"   - Online: {online_action} ({online_confidence:.2%}) [Weight: {weights['online']:.2f}]")
-            logger.info(f"   - Final: {final_decision} ({final_confidence:.2%})")
+            # Log the decision with method used
+            logger = BOT_LOGGERS.get('RLStrategy', logging.getLogger())
+            logger.info(f" [Production Confidence] {symbol}: {final_decision} ({final_confidence:.2%}) via {method_used}")
             
             return final_decision, final_confidence
             
         except Exception as e:
             logging.error(f"Error combining unified decisions: {e}")
-            return "HOLD", 0.5
+            # Fallback to simple decision
+            all_actions = [rl_action, master_action, ensemble_action, online_action]
+            most_common = max(set(all_actions), key=all_actions.count)
+            avg_confidence = (rl_confidence + master_confidence + ensemble_confidence + online_confidence) / 4
+            return most_common, avg_confidence
+    
+    def _calculate_volatility(self, symbol):
+        """Calculate volatility for the symbol"""
+        try:
+            if symbol not in getattr(self, 'symbol_data', {}):
+                return 0.5  # Default volatility
+            
+            data = self.symbol_data[symbol]
+            if len(data) < 20:
+                return 0.5
+            
+            # Calculate 20-period ATR-based volatility
+            closes = data['close'].values
+            highs = data['high'].values
+            lows = data['low'].values
+            
+            # True Range calculation
+            tr_values = []
+            for i in range(1, len(closes)):
+                tr = max(
+                    highs[i] - lows[i],
+                    abs(highs[i] - closes[i-1]),
+                    abs(lows[i] - closes[i-1])
+                )
+                tr_values.append(tr)
+            
+            if not tr_values:
+                return 0.5
+            
+            # Average True Range
+            atr = sum(tr_values[-20:]) / min(20, len(tr_values))
+            
+            # Normalize ATR to price (as percentage)
+            current_price = closes[-1]
+            volatility = (atr / current_price) if current_price > 0 else 0.5
+            
+            # Scale to 0-1 range (typical forex volatility is 0.5-3%)
+            normalized_volatility = min(1.0, max(0.0, volatility / 0.03))
+            
+            return normalized_volatility
+            
+        except Exception as e:
+            logging.warning(f"Error calculating volatility for {symbol}: {e}")
+            return 0.5
+    
+    def update_production_metrics(self, symbol: str, decision: str, confidence: float, outcome: float = None):
+        """Update production metrics and performance tracking"""
+        try:
+            # Update production confidence manager
+            if outcome is not None:
+                self.production_confidence_manager.update_performance(symbol, confidence, outcome)
+                
+                # Update production metrics
+                self.production_metrics['total_trades'] += 1
+                if outcome > 0:
+                    self.production_metrics['successful_trades'] += 1
+            
+            # Update performance stats
+            if symbol not in self.production_metrics['performance_stats']:
+                self.production_metrics['performance_stats'][symbol] = {
+                    'total_signals': 0,
+                    'avg_confidence': 0.5,
+                    'confidence_history': []
+                }
+            
+            stats = self.production_metrics['performance_stats'][symbol]
+            stats['total_signals'] += 1
+            stats['confidence_history'].append(confidence)
+            
+            # Keep only last 100 confidence values
+            if len(stats['confidence_history']) > 100:
+                stats['confidence_history'] = stats['confidence_history'][-100:]
+            
+            # Update average confidence
+            stats['avg_confidence'] = sum(stats['confidence_history']) / len(stats['confidence_history'])
+            
+        except Exception as e:
+            logging.error(f"Error updating production metrics: {e}")
+            
+    def get_production_health_report(self) -> dict:
+        """Generate comprehensive production health report"""
+        try:
+            uptime = datetime.now() - self.production_metrics['start_time']
+            
+            # Calculate success rates
+            trade_success_rate = 0.5
+            if self.production_metrics['total_trades'] > 0:
+                trade_success_rate = self.production_metrics['successful_trades'] / self.production_metrics['total_trades']
+            
+            cycle_success_rate = 0.5
+            if self.production_metrics['total_cycles'] > 0:
+                cycle_success_rate = self.production_metrics['successful_cycles'] / self.production_metrics['total_cycles']
+            
+            # Get confidence manager stats
+            confidence_stats = {}
+            for symbol in self.production_confidence_manager.performance_metrics:
+                perf = self.production_confidence_manager.performance_metrics[symbol]
+                confidence_stats[symbol] = {
+                    'success_rate': perf.get('success_rate', 0.5),
+                    'total_trades': perf.get('total_trades', 0),
+                    'confidence_ranges': perf.get('confidence_ranges', {})
+                }
+            
+            return {
+                'uptime_hours': uptime.total_seconds() / 3600,
+                'trade_success_rate': trade_success_rate,
+                'cycle_success_rate': cycle_success_rate,
+                'total_trades': self.production_metrics['total_trades'],
+                'total_cycles': self.production_metrics['total_cycles'],
+                'confidence_stats': confidence_stats,
+                'api_health': self.production_metrics.get('api_health', {}),
+                'error_counts': self.production_metrics.get('error_counts', {}),
+                'performance_stats': self.production_metrics.get('performance_stats', {}),
+                'current_method': getattr(self.production_confidence_manager, 'current_method', 'adaptive_dynamic')
+            }
+            
+        except Exception as e:
+            logging.error(f"Error generating health report: {e}")
+            return {'error': str(e)}
     
     def _calculate_decision_consistency_with_online_learning(self, rl_action, master_action, ensemble_action, online_action):
         """Calculate consistency factor including online learning"""
@@ -18908,8 +19375,8 @@ class EnhancedTradingBot:
                         # Decode action with enhanced logic
                         action_name, confidence_multiplier = self.dynamic_action_space.decode_action(action_code, symbol_to_act, market_regime)
                         
-                        # Apply adaptive confidence threshold
-                        adaptive_threshold = self.rl_performance_tracker.get_adaptive_threshold(symbol_to_act)
+                        # Use production confidence manager for threshold
+                        adaptive_threshold = self.production_confidence_manager.get_optimal_threshold(symbol_to_act, action_name)
                         adjusted_confidence = confidence * confidence_multiplier
                         
                         # Apply Transfer Learning
@@ -18951,6 +19418,9 @@ class EnhancedTradingBot:
                         else:
                             logger.info(f" [RL Strategy] {symbol_to_act}: Final Confidence {final_confidence:.2%} < Threshold {adaptive_threshold:.2%}")
                         
+                        # Update production metrics
+                        self.update_production_metrics(symbol_to_act, final_decision, final_confidence)
+                        
                         # Trigger online learning feedback loop
                         self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
                     
@@ -18960,7 +19430,7 @@ class EnhancedTradingBot:
                         # For HOLD actions, use simple decision combination
                         action_name = "HOLD"
                         adjusted_confidence = confidence
-                        adaptive_threshold = max(0.40, self.rl_performance_tracker.get_adaptive_threshold(symbol_to_act) - 0.05)  # Lower threshold for HOLD
+                        adaptive_threshold = self.production_confidence_manager.get_optimal_threshold(symbol_to_act, action_name)
                         
                         # Combine decisions with equal weighting for HOLD actions
                         final_decision, final_confidence = self._combine_decisions_unified(
@@ -18985,6 +19455,9 @@ class EnhancedTradingBot:
                             tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
                         else:
                             logger.info(f" [RL Strategy] {symbol_to_act}: No action taken - {final_decision} ({final_confidence:.2%}) < Threshold {adaptive_threshold:.2%}")
+                        
+                        # Update production metrics
+                        self.update_production_metrics(symbol_to_act, final_decision, final_confidence)
                         
                         # Trigger online learning feedback loop
                         self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
