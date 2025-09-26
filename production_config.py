@@ -54,6 +54,47 @@ PRODUCTION_CONFIDENCE_CONFIG = {
 }
 
 # ==============================================================================
+# ONLINE LEARNING BOOTSTRAP CONFIGURATION
+# ==============================================================================
+
+ONLINE_LEARNING_BOOTSTRAP_CONFIG = {
+    # Bootstrap training settings
+    'ENABLE_BOOTSTRAP': True,                    # Enable bootstrap initial training
+    'BOOTSTRAP_METHOD': 'consensus',             # Options: 'consensus', 'historical', 'hybrid'
+    'BOOTSTRAP_SAMPLES': 150,                    # Number of bootstrap samples to generate
+    'MIN_BOOTSTRAP_SAMPLES': 50,                 # Minimum samples required for bootstrap
+    
+    # Consensus method settings
+    'CONSENSUS_THRESHOLD': 0.6,                  # 60% agreement required for consensus
+    'CONSENSUS_WEIGHTS': {                       # Weights for different models in consensus
+        'rl': 0.35,
+        'master': 0.30,
+        'ensemble': 0.25,
+        'online': 0.10
+    },
+    
+    # Historical method settings
+    'HISTORICAL_LOOKBACK': 5000,                 # Number of historical candles to analyze
+    'FUTURE_RETURN_PERIODS': 10,                 # Look ahead periods for labeling
+    'BUY_THRESHOLD': 0.015,                      # 1.5% return threshold for BUY label
+    'SELL_THRESHOLD': -0.015,                    # -1.5% return threshold for SELL label
+    
+    # Hybrid method settings
+    'CONSENSUS_RATIO': 0.7,                      # 70% consensus, 30% historical
+    'HISTORICAL_RATIO': 0.3,
+    
+    # Quality control
+    'ENABLE_SAMPLE_VALIDATION': True,            # Validate bootstrap samples quality
+    'MIN_CONFIDENCE_THRESHOLD': 0.4,             # Minimum confidence for valid samples
+    'MAX_IMBALANCE_RATIO': 0.8,                  # Maximum class imbalance allowed
+    
+    # Performance settings
+    'PARALLEL_BOOTSTRAP': True,                  # Enable parallel bootstrap processing
+    'BOOTSTRAP_TIMEOUT': 30,                     # Timeout for bootstrap process (seconds)
+    'ENABLE_BOOTSTRAP_LOGGING': True,            # Enable detailed bootstrap logging
+}
+
+# ==============================================================================
 # PERFORMANCE OPTIMIZATION
 # ==============================================================================
 
