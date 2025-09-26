@@ -1903,7 +1903,7 @@ TRADING_ECONOMICS_RATE_LIMIT = 60  # Minimum seconds between API calls
 RISK_MANAGEMENT = {
     "MAX_RISK_PER_TRADE": 0.02,  # 2% max risk per trade
     "MAX_PORTFOLIO_RISK": 0.10,  # 10% max total portfolio risk
-    "MAX_OPEN_POSITIONS": 5,     # Maximum number of open positions
+    "MAX_OPEN_POSITIONS": 9,     # Maximum number of open positions (matches all symbols)
     "VOLATILITY_LOOKBACK": 20,   # ATR lookback period
     "SL_ATR_MULTIPLIER": 1.5,    # Stop losfixTR multiplier
     "BASE_RR_RATIO": 1.5,        # Base risk-reward ratio
@@ -1953,7 +1953,7 @@ MIN_INFORMATION_RATIO = 0.5
 # Enhanced risk management configuration by asset class
 RISK_CONFIG_BY_ASSET_CLASS = {
     "equity_index": {
-        "max_position_size": 0.25,  # 25% max per equity index
+        "max_position_size": 0.35,  # 35% max per equity index (increased for all symbols)
         "correlation_threshold": 0.7,
         "var_multiplier": 1.0,
         "stop_loss_atr": 2.0,
@@ -1963,7 +1963,7 @@ RISK_CONFIG_BY_ASSET_CLASS = {
         "gap_risk_factor": 1.5
     },
     "commodity": {
-        "max_position_size": 0.20,  # 20% max per commodity
+        "max_position_size": 0.30,  # 30% max per commodity (increased for all symbols)
         "correlation_threshold": 0.6,
         "var_multiplier": 1.2,
         "stop_loss_atr": 2.5,
@@ -1973,7 +1973,7 @@ RISK_CONFIG_BY_ASSET_CLASS = {
         "gap_risk_factor": 1.0
     },
     "forex": {
-        "max_position_size": 0.15,  # 15% max per forex pair
+        "max_position_size": 0.25,  # 25% max per forex pair (increased for all symbols)
         "correlation_threshold": 0.8,
         "var_multiplier": 0.8,
         "stop_loss_atr": 1.5,
@@ -1983,7 +1983,7 @@ RISK_CONFIG_BY_ASSET_CLASS = {
         "gap_risk_factor": 1.2
     },
     "cryptocurrency": {
-        "max_position_size": 0.10,  # 10% max per crypto
+        "max_position_size": 0.20,  # 20% max per crypto (increased for all symbols)
         "correlation_threshold": 0.5,
         "var_multiplier": 1.5,
         "stop_loss_atr": 3.0,
@@ -1996,13 +1996,13 @@ RISK_CONFIG_BY_ASSET_CLASS = {
 
 # Portfolio-level risk limits
 PORTFOLIO_RISK_LIMITS = {
-    "max_total_exposure": 0.80,  # 80% max total portfolio exposure
-    "max_asset_class_exposure": 0.50,  # 50% max per asset class
-    "max_correlation_exposure": 0.40,  # 40% max for highly correlated positions
+    "max_total_exposure": 0.90,  # 90% max total portfolio exposure (increased for all symbols)
+    "max_asset_class_exposure": 0.70,  # 70% max per asset class (increased for all symbols)
+    "max_correlation_exposure": 0.50,  # 50% max for highly correlated positions (increased)
     "daily_var_limit": 0.02,  # 2% daily VaR limit
     "weekly_var_limit": 0.05,  # 5% weekly VaR limit
     "max_drawdown_limit": 0.15,  # 15% max drawdown
-    "concentration_limit": 0.30  # 30% max concentration in single position
+    "concentration_limit": 0.35  # 35% max concentration in single position (increased)
 }
 
 # Observability constants
@@ -4187,9 +4187,9 @@ TIMEFRAME_MODEL_CONFIG = {
 # === TIMEFRAME-SPECIFIC RISK MANAGEMENT ===
 TIMEFRAME_RISK_CONFIG = {
     "H1": {
-        "max_position_size": 0.02,  # 2% per trade
+        "max_position_size": 0.04,  # 4% per trade (increased for all symbols)
         "max_daily_loss": 0.05,    # 5% daily loss limit
-        "max_concurrent_trades": 3,
+        "max_concurrent_trades": 9,  # Increased to match all symbols
         "correlation_threshold": 0.7,
         "volatility_adjustment": True,
         "session_risk_multiplier": {
@@ -4200,9 +4200,9 @@ TIMEFRAME_RISK_CONFIG = {
         }
     },
     "H4": {
-        "max_position_size": 0.03,  # 3% per trade
+        "max_position_size": 0.06,  # 6% per trade (increased for all symbols)
         "max_daily_loss": 0.08,    # 8% daily loss limit
-        "max_concurrent_trades": 5,
+        "max_concurrent_trades": 9,  # Increased to match all symbols
         "correlation_threshold": 0.6,
         "volatility_adjustment": True,
         "session_risk_multiplier": {
@@ -4213,9 +4213,9 @@ TIMEFRAME_RISK_CONFIG = {
         }
     },
     "D1": {
-        "max_position_size": 0.05,  # 5% per trade
+        "max_position_size": 0.08,  # 8% per trade (increased for all symbols)
         "max_daily_loss": 0.12,    # 12% daily loss limit
-        "max_concurrent_trades": 8,
+        "max_concurrent_trades": 9,  # Increased to match all symbols
         "correlation_threshold": 0.5,
         "volatility_adjustment": True,
         "session_risk_multiplier": {
@@ -4226,9 +4226,9 @@ TIMEFRAME_RISK_CONFIG = {
         }
     },
     "W1": {
-        "max_position_size": 0.08,  # 8% per trade
+        "max_position_size": 0.12,  # 12% per trade (increased for all symbols)
         "max_daily_loss": 0.15,     # 15% daily loss limit
-        "max_concurrent_trades": 10,
+        "max_concurrent_trades": 9,  # Increased to match all symbols
         "correlation_threshold": 0.4,
         "volatility_adjustment": True,
         "session_risk_multiplier": {
@@ -21931,8 +21931,8 @@ class AdvancedRiskManager:
         self.correlation_matrix = {}
 
         # Position sizing limits
-        self.max_position_size_percent = 0.1  # 10% max per position
-        self.max_portfolio_exposure = 0.8  # 80% max total exposure
+        self.max_position_size_percent = 0.15  # 15% max per position (increased for all symbols)
+        self.max_portfolio_exposure = 0.9  # 90% max total exposure (increased for all symbols)
     def _initialize_symbol_risk_configs(self):
         """Initialize risk configurations for each symbol"""
         configs = {}
