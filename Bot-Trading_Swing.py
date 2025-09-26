@@ -1897,7 +1897,7 @@ GOOGLE_AI_API_KEY = "AIzaSyBCexoODvgrN2QRG8_iKv3p5VTJ5jaJ_B0"
 TRADING_ECONOMICS_API_KEY = "a284ad0cdba547c:p5oyv77j6kovqhv"  
 TRADING_ECONOMICS_LAST_CALL = 0  # Track last API call time for rate limiting
 TRADING_ECONOMICS_CACHE = {}  # Cache for API responses
-TRADING_ECONOMICS_RATE_LIMIT = 60  # Minimum seconds between API calls
+TRADING_ECONOMICS_RATE_LIMIT = 0  # No wait between API calls
 
 # Risk Management Configuration
 RISK_MANAGEMENT = {
