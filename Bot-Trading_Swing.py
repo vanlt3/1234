@@ -434,6 +434,27 @@ API_CONFIGS: Dict[str, APIConfig] = {
         api_key='68bafd7d44a7f0.25202650',
         base_url='https://eodhistoricaldata.com/api',
         rate_limit=20
+    ),
+    # Free Economic Calendar APIs
+    'ALPHA_VANTAGE': APIConfig(
+        api_key='free',  # Free tier available
+        base_url='https://www.alphavantage.co/query',
+        rate_limit=5
+    ),
+    'YAHOO_FINANCE': APIConfig(
+        api_key='free',  # No API key required
+        base_url='https://query1.finance.yahoo.com/v1/finance',
+        rate_limit=2000
+    ),
+    'FRED': APIConfig(
+        api_key='free',  # Free API available
+        base_url='https://api.stlouisfed.org/fred',
+        rate_limit=120
+    ),
+    'ECONOMIC_CALENDAR_API': APIConfig(
+        api_key='free',  # Free economic calendar
+        base_url='https://api.forexfactory.com',
+        rate_limit=60
     )
 }
 
@@ -477,7 +498,12 @@ API_ENDPOINTS = {
     'FINHUB': {'base_url': API_CONFIGS['FINHUB'].base_url, 'quote': '/quote', 'news': '/company-news', 'sentiment': '/news-sentiment'},
     'MARKETAUX': {'base_url': API_CONFIGS['MARKETAUX'].base_url, 'news': '/news/all', 'news_intraday': '/news/intraday'},
     'NEWSAPI': {'base_url': API_CONFIGS['NEWSAPI'].base_url, 'everything': '/everything', 'top_headlines': '/top-headlines'},
-    'EODHD': {'base_url': API_CONFIGS['EODHD'].base_url, 'eod': '/eod', 'real_time': '/real-time', 'fundamentals': '/fundamentals'}
+    'EODHD': {'base_url': API_CONFIGS['EODHD'].base_url, 'eod': '/eod', 'real_time': '/real-time', 'fundamentals': '/fundamentals'},
+    # Economic Calendar APIs
+    'ALPHA_VANTAGE': {'base_url': API_CONFIGS['ALPHA_VANTAGE'].base_url, 'economic_indicators': '', 'news': ''},
+    'YAHOO_FINANCE': {'base_url': API_CONFIGS['YAHOO_FINANCE'].base_url, 'calendar': '/calendar', 'news': '/news'},
+    'FRED': {'base_url': API_CONFIGS['FRED'].base_url, 'series': '/series', 'observations': '/series/observations'},
+    'ECONOMIC_CALENDAR_API': {'base_url': API_CONFIGS['ECONOMIC_CALENDAR_API'].base_url, 'calendar': '/calendar.json'}
 }
 RATE_LIMITS = {name: config.rate_limit for name, config in API_CONFIGS.items()}
 
@@ -5990,6 +6016,524 @@ class NewsApiOrgProvider(NewsProvider):
         except Exception as e:
             logging.error(f"NewsAPI.org error: {e}")
             return []
+
+# ==============================================================================
+# ECONOMIC CALENDAR PROVIDERS
+# ==============================================================================
+
+class EconomicCalendarProvider(ABC):
+    """Abstract base class for economic calendar providers"""
+    def __init__(self, api_key=None):
+        self.api_key = api_key
+        self.enabled = True
+        self.last_call_time = 0
+        self.rate_limit_delay = 1  # Default 1 second between calls
+        
+    @abstractmethod
+    async def fetch_economic_events(self, session, start_date: str, end_date: str):
+        """Fetch economic events for date range. Must return standardized format."""
+        pass
+    
+    def _standardize_event(self, title: str, date: str, time: str, currency: str, 
+                          importance: str, forecast: str = "", previous: str = "", actual: str = ""):
+        """Helper to create standardized economic event format"""
+        return {
+            "title": title,
+            "date": date,
+            "time": time,
+            "currency": currency.upper(),
+            "importance": importance.lower(),
+            "forecast": forecast,
+            "previous": previous,
+            "actual": actual,
+            "source": self.__class__.__name__
+        }
+    
+    async def _rate_limit_check(self):
+        """Check and enforce rate limiting"""
+        import time
+        current_time = time.time()
+        time_since_last_call = current_time - self.last_call_time
+        
+        if time_since_last_call < self.rate_limit_delay:
+            wait_time = self.rate_limit_delay - time_since_last_call
+            await asyncio.sleep(wait_time)
+        
+        self.last_call_time = time.time()
+
+class YahooFinanceEconomicProvider(EconomicCalendarProvider):
+    """Yahoo Finance economic calendar provider (free)"""
+    
+    def __init__(self):
+        super().__init__()
+        self.base_url = "https://query1.finance.yahoo.com/v1/finance"
+        self.rate_limit_delay = 0.5  # 0.5 second delay
+        
+    async def fetch_economic_events(self, session, start_date: str, end_date: str):
+        """Fetch economic events from Yahoo Finance"""
+        if not self.enabled:
+            return []
+            
+        await self._rate_limit_check()
+        
+        try:
+            # Yahoo Finance doesn't have a direct economic calendar API, 
+            # but we can get earnings calendar and major events
+            url = f"{self.base_url}/calendar"
+            params = {
+                'region': 'US',
+                'lang': 'en-US',
+                'from': start_date,
+                'to': end_date
+            }
+            
+            async with session.get(url, params=params, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return self._parse_yahoo_events(data)
+                else:
+                    logging.warning(f"Yahoo Finance calendar API returned status {response.status}")
+                    return []
+                    
+        except Exception as e:
+            logging.error(f"Yahoo Finance economic calendar error: {e}")
+            return []
+    
+    def _parse_yahoo_events(self, data):
+        """Parse Yahoo Finance calendar data"""
+        events = []
+        try:
+            # Parse earnings calendar as economic events
+            if 'earnings' in data:
+                for earning in data['earnings']['result']:
+                    events.append(self._standardize_event(
+                        title=f"{earning.get('companyName', 'Unknown')} Earnings",
+                        date=earning.get('date', ''),
+                        time=earning.get('time', ''),
+                        currency='USD',
+                        importance='medium',
+                        forecast=earning.get('epsEstimate', ''),
+                        actual=earning.get('epsActual', '')
+                    ))
+        except Exception as e:
+            logging.error(f"Error parsing Yahoo Finance events: {e}")
+            
+        return events
+
+class FREDEconomicProvider(EconomicCalendarProvider):
+    """Federal Reserve Economic Data (FRED) provider (free)"""
+    
+    def __init__(self, api_key="free"):
+        super().__init__(api_key)
+        self.base_url = "https://api.stlouisfed.org/fred"
+        self.rate_limit_delay = 0.5  # FRED allows 120 requests per minute
+        
+        # Key economic indicators to track
+        self.key_indicators = {
+            'GDP': 'GDP',
+            'CPI': 'CPIAUCSL',
+            'Unemployment': 'UNRATE',
+            'Federal Funds Rate': 'FEDFUNDS',
+            'Consumer Sentiment': 'UMCSENT',
+            'Retail Sales': 'RSXFS',
+            'Industrial Production': 'INDPRO',
+            'Housing Starts': 'HOUST'
+        }
+        
+    async def fetch_economic_events(self, session, start_date: str, end_date: str):
+        """Fetch economic indicators from FRED"""
+        if not self.enabled:
+            return []
+            
+        events = []
+        
+        for indicator_name, series_id in self.key_indicators.items():
+            await self._rate_limit_check()
+            
+            try:
+                # Get latest release dates for this series
+                url = f"{self.base_url}/series/observations"
+                params = {
+                    'series_id': series_id,
+                    'api_key': 'free',  # FRED doesn't require registration for basic access
+                    'file_type': 'json',
+                    'observation_start': start_date,
+                    'observation_end': end_date,
+                    'sort_order': 'desc',
+                    'limit': 5
+                }
+                
+                async with session.get(url, params=params, timeout=10) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        events.extend(self._parse_fred_data(data, indicator_name))
+                    else:
+                        logging.warning(f"FRED API returned status {response.status} for {indicator_name}")
+                        
+            except Exception as e:
+                logging.error(f"FRED API error for {indicator_name}: {e}")
+                continue
+                
+        return events
+    
+    def _parse_fred_data(self, data, indicator_name):
+        """Parse FRED API response"""
+        events = []
+        try:
+            observations = data.get('observations', [])
+            for obs in observations:
+                if obs.get('value') != '.':  # FRED uses '.' for missing values
+                    events.append(self._standardize_event(
+                        title=f"{indicator_name} Release",
+                        date=obs.get('date', ''),
+                        time="08:30",  # Most US economic data released at 8:30 AM ET
+                        currency='USD',
+                        importance='high',
+                        actual=obs.get('value', ''),
+                        forecast='',
+                        previous=''
+                    ))
+        except Exception as e:
+            logging.error(f"Error parsing FRED data for {indicator_name}: {e}")
+            
+        return events
+
+class ForexFactoryEconomicProvider(EconomicCalendarProvider):
+    """Forex Factory economic calendar provider (free scraping)"""
+    
+    def __init__(self):
+        super().__init__()
+        self.base_url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        self.rate_limit_delay = 2  # Be respectful with scraping
+        
+    async def fetch_economic_events(self, session, start_date: str, end_date: str):
+        """Fetch economic events from Forex Factory"""
+        if not self.enabled:
+            return []
+            
+        await self._rate_limit_check()
+        
+        try:
+            # Forex Factory free JSON feed
+            async with session.get(self.base_url, timeout=15) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return self._parse_forex_factory_events(data, start_date, end_date)
+                else:
+                    logging.warning(f"Forex Factory API returned status {response.status}")
+                    return []
+                    
+        except Exception as e:
+            logging.error(f"Forex Factory economic calendar error: {e}")
+            return []
+    
+    def _parse_forex_factory_events(self, data, start_date: str, end_date: str):
+        """Parse Forex Factory calendar data"""
+        events = []
+        try:
+            from datetime import datetime, timedelta
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            for event in data:
+                try:
+                    # Parse event date
+                    event_date_str = event.get('date', '')
+                    if not event_date_str:
+                        continue
+                        
+                    event_date = datetime.strptime(event_date_str, '%Y-%m-%d')
+                    
+                    # Filter by date range
+                    if start_dt <= event_date <= end_dt:
+                        # Map impact to importance
+                        impact = event.get('impact', '').lower()
+                        importance_map = {
+                            'high': 'high',
+                            'medium': 'medium', 
+                            'low': 'low',
+                            'holiday': 'low'
+                        }
+                        importance = importance_map.get(impact, 'medium')
+                        
+                        events.append(self._standardize_event(
+                            title=event.get('title', ''),
+                            date=event_date_str,
+                            time=event.get('time', ''),
+                            currency=event.get('currency', ''),
+                            importance=importance,
+                            forecast=event.get('forecast', ''),
+                            previous=event.get('previous', ''),
+                            actual=event.get('actual', '')
+                        ))
+                        
+                except Exception as e:
+                    logging.error(f"Error parsing individual Forex Factory event: {e}")
+                    continue
+                    
+        except Exception as e:
+            logging.error(f"Error parsing Forex Factory events: {e}")
+            
+        return events
+
+class AlphaVantageEconomicProvider(EconomicCalendarProvider):
+    """Alpha Vantage economic indicators provider (free tier)"""
+    
+    def __init__(self, api_key="demo"):
+        super().__init__(api_key)
+        self.base_url = "https://www.alphavantage.co/query"
+        self.rate_limit_delay = 12  # Free tier: 5 requests per minute
+        
+        # Key economic functions available in Alpha Vantage
+        self.economic_functions = {
+            'Real GDP': 'REAL_GDP',
+            'Real GDP per Capita': 'REAL_GDP_PER_CAPITA', 
+            'Federal Funds Rate': 'FEDERAL_FUNDS_RATE',
+            'CPI': 'CPI',
+            'Inflation': 'INFLATION',
+            'Retail Sales': 'RETAIL_SALES',
+            'Consumer Sentiment': 'CONSUMER_SENTIMENT',
+            'Unemployment Rate': 'UNEMPLOYMENT'
+        }
+        
+    async def fetch_economic_events(self, session, start_date: str, end_date: str):
+        """Fetch economic indicators from Alpha Vantage"""
+        if not self.enabled:
+            return []
+            
+        events = []
+        
+        for indicator_name, function_name in self.economic_functions.items():
+            await self._rate_limit_check()
+            
+            try:
+                params = {
+                    'function': function_name,
+                    'apikey': self.api_key if self.api_key != "free" else "demo",
+                    'datatype': 'json'
+                }
+                
+                async with session.get(self.base_url, params=params, timeout=15) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        events.extend(self._parse_alpha_vantage_data(data, indicator_name))
+                    else:
+                        logging.warning(f"Alpha Vantage API returned status {response.status} for {indicator_name}")
+                        
+            except Exception as e:
+                logging.error(f"Alpha Vantage API error for {indicator_name}: {e}")
+                continue
+                
+        return events
+    
+    def _parse_alpha_vantage_data(self, data, indicator_name):
+        """Parse Alpha Vantage economic data"""
+        events = []
+        try:
+            # Alpha Vantage returns data in different formats
+            if 'data' in data:
+                data_points = data['data'][:5]  # Get latest 5 data points
+                for point in data_points:
+                    events.append(self._standardize_event(
+                        title=f"{indicator_name} Release",
+                        date=point.get('date', ''),
+                        time="08:30",  # Default release time
+                        currency='USD',
+                        importance='high',
+                        actual=point.get('value', ''),
+                        forecast='',
+                        previous=''
+                    ))
+        except Exception as e:
+            logging.error(f"Error parsing Alpha Vantage data for {indicator_name}: {e}")
+            
+        return events
+
+# ==============================================================================
+# ECONOMIC CALENDAR MANAGER
+# ==============================================================================
+
+class EconomicCalendarManager:
+    """Manager class for aggregating economic events from multiple free providers"""
+    
+    def __init__(self):
+        self.providers = []
+        self.cache = {}
+        self.cache_timeout = 3600  # 1 hour cache
+        self.last_fetch_time = {}
+        
+        # Initialize all free providers
+        self._initialize_providers()
+        
+    def _initialize_providers(self):
+        """Initialize all available economic calendar providers"""
+        try:
+            # Add Forex Factory provider (most reliable free source)
+            forex_factory = ForexFactoryEconomicProvider()
+            if forex_factory.enabled:
+                self.providers.append(forex_factory)
+                logging.info("✅ [EconomicCalendarManager] Forex Factory provider enabled")
+            
+            # Add FRED provider for US economic data
+            fred = FREDEconomicProvider()
+            if fred.enabled:
+                self.providers.append(fred)
+                logging.info("✅ [EconomicCalendarManager] FRED provider enabled")
+            
+            # Add Yahoo Finance provider
+            yahoo = YahooFinanceEconomicProvider()
+            if yahoo.enabled:
+                self.providers.append(yahoo)
+                logging.info("✅ [EconomicCalendarManager] Yahoo Finance provider enabled")
+            
+            # Add Alpha Vantage provider
+            alpha_vantage = AlphaVantageEconomicProvider()
+            if alpha_vantage.enabled:
+                self.providers.append(alpha_vantage)
+                logging.info("✅ [EconomicCalendarManager] Alpha Vantage provider enabled")
+                
+            logging.info(f"📊 [EconomicCalendarManager] Initialized {len(self.providers)} economic calendar providers")
+            
+        except Exception as e:
+            logging.error(f"Error initializing economic calendar providers: {e}")
+    
+    async def get_economic_calendar(self, start_date: str = None, end_date: str = None):
+        """
+        Get aggregated economic calendar from all providers
+        Returns list of standardized economic events
+        """
+        from datetime import datetime, timedelta
+        
+        # Set default date range if not provided
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+        if not end_date:
+            end_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+        
+        cache_key = f"{start_date}_{end_date}"
+        
+        # Check cache first
+        if cache_key in self.cache:
+            cache_time = self.last_fetch_time.get(cache_key, 0)
+            if (datetime.now().timestamp() - cache_time) < self.cache_timeout:
+                logging.info(f"📋 [EconomicCalendarManager] Using cached calendar data for {start_date} to {end_date}")
+                return self.cache[cache_key]
+        
+        # Fetch from all providers
+        all_events = []
+        
+        if not self.providers:
+            logging.warning("⚠️ [EconomicCalendarManager] No economic calendar providers available")
+            return []
+        
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for provider in self.providers:
+                if provider.enabled:
+                    tasks.append(self._fetch_from_provider(session, provider, start_date, end_date))
+            
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        logging.error(f"Provider {self.providers[i].__class__.__name__} failed: {result}")
+                    elif isinstance(result, list):
+                        all_events.extend(result)
+                        logging.info(f"📊 [EconomicCalendarManager] {self.providers[i].__class__.__name__} returned {len(result)} events")
+        
+        # Remove duplicates and sort by date
+        unique_events = self._deduplicate_events(all_events)
+        sorted_events = sorted(unique_events, key=lambda x: (x.get('date', ''), x.get('time', '')))
+        
+        # Filter for high impact events only
+        high_impact_events = self._filter_high_impact_events(sorted_events)
+        
+        # Cache the results
+        self.cache[cache_key] = high_impact_events
+        self.last_fetch_time[cache_key] = datetime.now().timestamp()
+        
+        logging.info(f"📋 [EconomicCalendarManager] Aggregated {len(high_impact_events)} high-impact events from {len(self.providers)} providers")
+        
+        return high_impact_events
+    
+    async def _fetch_from_provider(self, session, provider, start_date: str, end_date: str):
+        """Fetch events from a single provider with error handling"""
+        try:
+            return await provider.fetch_economic_events(session, start_date, end_date)
+        except Exception as e:
+            logging.error(f"Error fetching from {provider.__class__.__name__}: {e}")
+            return []
+    
+    def _deduplicate_events(self, events):
+        """Remove duplicate events based on title, date, and time"""
+        seen = set()
+        unique_events = []
+        
+        for event in events:
+            # Create a unique key for each event
+            key = (
+                event.get('title', '').strip().lower(),
+                event.get('date', ''),
+                event.get('time', ''),
+                event.get('currency', '')
+            )
+            
+            if key not in seen:
+                seen.add(key)
+                unique_events.append(event)
+        
+        return unique_events
+    
+    def _filter_high_impact_events(self, events):
+        """Filter events to keep only high and medium impact ones"""
+        high_impact_keywords = [
+            'NFP', 'CPI', 'GDP', 'FOMC', 'Fed', 'Interest Rate', 'Employment', 
+            'Inflation', 'PMI', 'Retail Sales', 'Consumer Confidence',
+            'Industrial Production', 'Housing', 'Unemployment'
+        ]
+        
+        filtered_events = []
+        
+        for event in events:
+            # Keep events marked as high importance
+            if event.get('importance', '').lower() == 'high':
+                filtered_events.append(event)
+                continue
+            
+            # Keep events with high impact keywords in title
+            title = event.get('title', '').lower()
+            if any(keyword.lower() in title for keyword in high_impact_keywords):
+                # Upgrade importance to high for keyword matches
+                event['importance'] = 'high'
+                filtered_events.append(event)
+                continue
+            
+            # Keep medium impact events from reliable sources
+            if (event.get('importance', '').lower() == 'medium' and 
+                event.get('source', '') in ['ForexFactoryEconomicProvider', 'FREDEconomicProvider']):
+                filtered_events.append(event)
+        
+        return filtered_events
+    
+    def get_provider_status(self):
+        """Get status of all economic calendar providers"""
+        status = {
+            'total_providers': len(self.providers),
+            'enabled_providers': sum(1 for p in self.providers if p.enabled),
+            'providers': []
+        }
+        
+        for provider in self.providers:
+            status['providers'].append({
+                'name': provider.__class__.__name__,
+                'enabled': provider.enabled,
+                'rate_limit_delay': provider.rate_limit_delay,
+                'last_call_time': provider.last_call_time
+            })
+        
+        return status
+
 # L p this not thay d i
 # === ENHANCED NEWS FILTER ===
 class EnhancedNewsFilter:
@@ -6138,6 +6682,23 @@ class NewsEconomicManager:
             # Initialize news providers with API keys
             self._initialize_news_providers()
             print("✅ [NewsEconomicManager] News providers initialized")
+            
+            # Initialize Economic Calendar Manager with free providers
+            print("🔄 [NewsEconomicManager] Initializing Economic Calendar Manager...")
+            try:
+                self.economic_calendar_manager = EconomicCalendarManager()
+                print("✅ [NewsEconomicManager] Economic Calendar Manager initialized")
+                
+                # Log provider status
+                status = self.economic_calendar_manager.get_provider_status()
+                print(f"📊 [NewsEconomicManager] Economic Calendar: {status['enabled_providers']}/{status['total_providers']} providers enabled")
+                for provider in status['providers']:
+                    status_emoji = "✅" if provider['enabled'] else "❌"
+                    print(f"   {status_emoji} {provider['name']}: {'Enabled' if provider['enabled'] else 'Disabled'}")
+                    
+            except Exception as e:
+                print(f"⚠️ [NewsEconomicManager] Failed to initialize Economic Calendar Manager: {e}")
+                self.economic_calendar_manager = None
         
             # API rate limiting
             self.api_call_times = {}
@@ -8489,6 +9050,135 @@ class EnhancedEnsembleModel:
                 }
 
         return explanations
+
+    def get_economic_calendar(self, init_date=None, end_date=None):
+        """
+        Get economic calendar from free providers via EconomicCalendarManager.
+        This replaces the old Trading Economics implementation with multiple free sources.
+        """
+        try:
+            # Check if Economic Calendar Manager is available
+            if not hasattr(self, 'economic_calendar_manager') or self.economic_calendar_manager is None:
+                logging.warning("⚠️ [NewsEconomicManager] Economic Calendar Manager not available - using fallback")
+                return self._get_fallback_economic_events(init_date, end_date)
+            
+            # Set default date range if not provided
+            from datetime import datetime, timedelta
+            if not init_date:
+                init_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+            if not end_date:
+                end_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            logging.info(f"📊 [NewsEconomicManager] Fetching economic calendar from free providers: {init_date} to {end_date}")
+            
+            # Use async function in sync context
+            import asyncio
+            try:
+                # Get or create event loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is already running, create a new task
+                    task = asyncio.create_task(
+                        self.economic_calendar_manager.get_economic_calendar(init_date, end_date)
+                    )
+                    # Wait for task completion
+                    events = loop.run_until_complete(task)
+                else:
+                    # If no loop is running, run in new loop
+                    events = loop.run_until_complete(
+                        self.economic_calendar_manager.get_economic_calendar(init_date, end_date)
+                    )
+            except RuntimeError:
+                # If we can't get event loop, run in new loop
+                events = asyncio.run(
+                    self.economic_calendar_manager.get_economic_calendar(init_date, end_date)
+                )
+            
+            # Convert to format expected by existing code
+            formatted_events = []
+            for event in events:
+                formatted_events.append({
+                    'Event': event.get('title', ''),
+                    'Date': event.get('date', ''),
+                    'Time': event.get('time', ''),
+                    'Currency': event.get('currency', ''),
+                    'Importance': event.get('importance', '').title(),  # Capitalize first letter
+                    'Forecast': event.get('forecast', ''),
+                    'Previous': event.get('previous', ''),
+                    'Actual': event.get('actual', ''),
+                    'Source': event.get('source', 'FreeProvider')
+                })
+            
+            logging.info(f"✅ [NewsEconomicManager] Retrieved {len(formatted_events)} economic events from free providers")
+            
+            # Update cache
+            today = datetime.now().date()
+            self.last_calendar_fetch_date = today
+            self.economic_calendar_cache = formatted_events
+            
+            return formatted_events
+            
+        except Exception as e:
+            logging.error(f"❌ [NewsEconomicManager] Error fetching economic calendar: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Return cached data if available
+            if hasattr(self, 'economic_calendar_cache') and self.economic_calendar_cache:
+                logging.info("📋 [NewsEconomicManager] Returning cached economic calendar data")
+                return self.economic_calendar_cache
+            
+            # Final fallback
+            return self._get_fallback_economic_events(init_date, end_date)
+    
+    def _get_fallback_economic_events(self, init_date=None, end_date=None):
+        """Fallback economic events when all providers fail"""
+        from datetime import datetime, timedelta
+        
+        if not init_date:
+            init_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+        if not end_date:
+            end_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+        
+        # Create basic fallback events for major economic releases
+        fallback_events = [
+            {
+                'Event': 'US Non-Farm Payrolls (NFP)',
+                'Date': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
+                'Time': '08:30',
+                'Currency': 'USD',
+                'Importance': 'High',
+                'Forecast': '',
+                'Previous': '',
+                'Actual': '',
+                'Source': 'Fallback'
+            },
+            {
+                'Event': 'US Consumer Price Index (CPI)',
+                'Date': (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d'),
+                'Time': '08:30',
+                'Currency': 'USD',
+                'Importance': 'High',
+                'Forecast': '',
+                'Previous': '',
+                'Actual': '',
+                'Source': 'Fallback'
+            },
+            {
+                'Event': 'FOMC Interest Rate Decision',
+                'Date': (datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d'),
+                'Time': '14:00',
+                'Currency': 'USD',
+                'Importance': 'High',
+                'Forecast': '',
+                'Previous': '',
+                'Actual': '',
+                'Source': 'Fallback'
+            }
+        ]
+        
+        logging.info(f"📋 [NewsEconomicManager] Using {len(fallback_events)} fallback economic events")
+        return fallback_events
 
 class OrderSafetyManager:
     """Advanced order safety with multiple validation layers"""
@@ -18214,7 +18904,7 @@ class EnhancedTradingBot:
             print(f"   [RL Strategy] CYCLE SUMMARY: {len(active_symbols_to_process)} processed, {len(tasks)} signals, {len(self.open_positions)} positions")
                 
                 # --- BU C 4: Check CONCEPT DRIFT SAU KHI T T CSYMBOLS  U C analysis ---
-                await self.check_concept_drift_for_processed_symbols(active_symbols_to_process)
+            await self.check_concept_drift_for_processed_symbols(active_symbols_to_process)
 
         except Exception as e:
             import traceback
