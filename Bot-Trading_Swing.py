@@ -26372,11 +26372,7 @@ else:
     print("⚠️ [Bootstrap] Not available - using standard online learning")
 
 
-if __name__ == "__main__": BLOCK WITH THIS
 
-# FIND AND REPLACE ALL MAIN EXECUTION (MAIN) IN FILE WITH THIS
-
-# FIND AND REPLACE ALL MAIN EXECUTION IN FILE
 
 
 # Bootstrap Configuration Validation
