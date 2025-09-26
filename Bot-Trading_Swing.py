@@ -16778,7 +16778,7 @@ class EnhancedTradingBot:
         self.consecutive_data_failures = 0
         self.circuit_breaker_active = False
 
-        # Weekendlose management
+        # Weekend close management
         self.weekend_close_executed = False
 
         # Experiment systemintegration
@@ -17548,8 +17548,8 @@ class EnhancedTradingBot:
                     pips REAL,
                     confidence REAL,
                     -- all from m I CHO TCA --
-                    signal_price REAL,    -- Gi mid t i thi dim T+n hi+u
-                    execution_slippage_pips REAL, -- tru t gi khi t hnh dng
+                    signal_price REAL,    -- Giá tại thời điểm tạo tín hiệu
+                    execution_slippage_pips REAL, -- trượt giá khi thực hiện lệnh
                     spread_cost_pips REAL -- Chi ph spread
                 )
             """
@@ -19914,7 +19914,7 @@ class EnhancedTradingBot:
             return None # not c s kin no suitable
 
         except Exception as e:
-            print(f"Li in Function has_high_impact_event_soon: {e}")
+            print(f"Lỗi trong Function has_high_impact_event_soon: {e}")
             return None
 
     def determine_market_regime(self, symbol, use_cache=True):
@@ -19985,10 +19985,10 @@ class EnhancedTradingBot:
             # <<<  fix: G I Function get_economic_calendar M I >>>
             calendar = self.news_manager.get_economic_calendar()
             if calendar:
-                status_report_parts.append(f"L y d {len(calendar)} s kin th tTrading Economics.")
+                status_report_parts.append(f"Lấy được {len(calendar)} sự kiện từ Trading Economics.")
                 print(status_report_parts[-1])
             else:
-                status_report_parts.append(f"not l y d l ch kinh t .")
+                status_report_parts.append(f"Không lấy được lịch kinh tế.")
                 return
 
             now_utc = datetime.now(pytz.utc)
@@ -20056,14 +20056,14 @@ class EnhancedTradingBot:
                     self.send_discord_alert(alert_message)
                 return
 
-            # K ch b n 2: not c s kin -> G i bo co tempty thi "an ton"
-            status_report_parts.append("not c s kin vi m no s p di n ra. An ton dgiao dh.")
+            # Kiểm tra bước 2: Không có sự kiện -> Gửi báo cáo empty thì "an toàn"
+            status_report_parts.append("Không có sự kiện nào sắp diễn ra. An toàn để giao dịch.")
             print(status_report_parts[-1])
             if TRADE_FILTERS.get("SEND_PRE_CHECK_STATUS_ALERT", False):
                 self.send_discord_alert("\n".join(status_report_parts))
 
         except Exception as e:
-            print(f"Li in Functioncheck_and_close_for_major_events: {e}")
+            print(f"Lỗi trong Function check_and_close_for_major_events: {e}")
     def _execute_trending_strategy(self, symbol):
         """
         Execute trending strategy (your original logic).
@@ -20945,9 +20945,9 @@ class EnhancedTradingBot:
                 'ang used': 'Closing',
                 'vthsau': 'positions',
                 'dtrnh': 'to avoid',
-                'cu tu n': 'weekend',
+                'cuối tuần': 'weekend',
                 'THNG BO': 'NOTICE',
-                'NG L NH old I TU N': 'WEEKEND POSITION CLOSURE'
+                'ĐÓNG LỆNH CUỐI TUẦN': 'WEEKEND POSITION CLOSURE'
             }
             
             for old_text, new_text in replacements.items():
@@ -22010,21 +22010,21 @@ class EnhancedTradingBot:
                     positions_to_close.append(symbol)
 
             if not positions_to_close:
-                print("[Weekendlose] not c l receiveo needs used vo cu tu n.")
+                print("[Weekend Close] Không có lệnh nào cần đóng cho cuối tuần.")
                 return
 
             alert_message = "🚨 **[NOTICE] WEEKEND POSITION CLOSURE**\n"
             alert_message += "Closing all non-crypto positions for weekend risk management:\n"
 
-            print(f"[Weekendlose] ang used {len(positions_to_close)} vth ...")
+            print(f"[Weekend Close] Đang đóng {len(positions_to_close)} vị thế ...")
 
             closed_count = 0
             for symbol in positions_to_close:
                 current_price = self.data_manager.get_current_price(symbol)
                 if current_price:
-                    reason = "ng l nh tused cu tu n"
+                    reason = "đóng lệnh cuối tuần"
                     signal = self.open_positions[symbol]['signal']
-                    alert_message += f"-  used {signal} **{symbol}** @ `{current_price:.5f}`\n"
+                    alert_message += f"- Đóng {signal} **{symbol}** @ `{current_price:.5f}`\n"
                     self.close_position_enhanced(symbol, reason, current_price)
                     closed_count += 1
 
@@ -22033,27 +22033,27 @@ class EnhancedTradingBot:
 
     def check_and_execute_weekend_close(self):
             """
-            Check xelevel must thi dim used l nh cu tu n not v t hnh dng if needs.
+            Kiểm tra và thực hiện đóng lệnh cuối tuần cho các vị thế nếu cần.
             """
             if not WEEKEND_CLOSE_CONFIG["ENABLED"]:
                 return
 
             now_utc = datetime.utcnow()
 
-            # Reset cvo ngy Th2
+            # Reset cờ vào ngày Thứ 2
             if now_utc.weekday() == 0 and self.weekend_close_executed:
-                print("[Weekendlose] Reset cused l nh cho tu n mi.")
+                print("[Weekend Close] Reset cờ đóng lệnh cho tuần mới.")
                 self.weekend_close_executed = False
 
-            # Check conditions used l nh
+            # Kiểm tra điều kiện đóng lệnh
             is_close_day = (now_utc.weekday() == WEEKEND_CLOSE_CONFIG["CLOSE_DAY_UTC"])
             is_past_close_time = (now_utc.hour >= WEEKEND_CLOSE_CONFIG["CLOSE_HOUR_UTC"] and
                                   now_utc.minute >= WEEKEND_CLOSE_CONFIG["CLOSE_MINUTE_UTC"])
 
             if is_close_day and is_past_close_time and not self.weekend_close_executed:
-                print("[Weekendlose]  dn thi dim used l nh cu tu n!")
+                print("[Weekend Close] Đến thời điểm đóng lệnh cuối tuần!")
                 self.close_all_non_crypto_positions_for_weekend()
-                self.weekend_close_executed = True # nhn d liu d thc hin d lߦ+p lߦi
+                self.weekend_close_executed = True # đánh dấu đã thực hiện đóng lệnh
     def update_trailing_stop(self, symbol, current_price):
         """
         DEPRECATED: This method is no longer used. 
@@ -22388,10 +22388,10 @@ class EnhancedTradingBot:
 
     def _display_portfolio_summary(self):
         """Display portfolio summary"""
-        print("\n----- TNG KT portfolio -----")
+        print("\n----- TỔNG KẾT DANH MỤC -----")
         for symbol, pos in self.open_positions.items():
             print(f"   - {symbol}: {pos['signal']} @ {pos['entry_price']:.5f}")
-        print(f"   - Tng v th : {len(self.open_positions)}/{RISK_MANAGEMENT['MAX_OPEN_POSITIONS']}")
+        print(f"   - Tổng vị thế: {len(self.open_positions)}/{RISK_MANAGEMENT['MAX_OPEN_POSITIONS']}")
     
     # === MASTER AGENT INTEGRATION METHODS ===
     
@@ -23320,7 +23320,7 @@ Chỉ trả về duy nhất một khối JSON với định dạng sau:
         if wait_seconds <= 0:
             wait_seconds += 3600
 
-        print(f"Đang báo. Còn {int(wait_seconds // 60)} phút {int(wait_seconds % 60)} giây cho đến {next_hour.strftime('%H:%M:%S')}...")
+        print(f"Đang chờ. Còn {int(wait_seconds // 60)} phút {int(wait_seconds % 60)} giây cho đến {next_hour.strftime('%H:%M:%S')}...")
         await asyncio.sleep(wait_seconds)
 class DriftMonitor:
     """
