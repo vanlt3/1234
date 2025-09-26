@@ -1565,6 +1565,17 @@ from scipy.special import expit
 
 # Machine Learning
 from sklearn.base import clone
+
+# Enhanced Online Learning Bootstrap Integration
+try:
+    from online_learning_bootstrap import OnlineLearningBootstrap
+    from online_learning_integration import EnhancedOnlineLearningManager, create_enhanced_online_learning_manager
+    from production_config import ONLINE_LEARNING_BOOTSTRAP_CONFIG
+    BOOTSTRAP_AVAILABLE = True
+    print("✅ [Bootstrap] Online Learning Bootstrap modules loaded successfully")
+except ImportError as e:
+    print(f"⚠️ [Bootstrap] Bootstrap modules not available: {e}")
+    BOOTSTRAP_AVAILABLE = False
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.exceptions import NotFittedError
@@ -5645,7 +5656,16 @@ class AutoRetrainManager:
         self.online_learning = OnlineLearningManager(bot_instance)
         
         # Initialize online learning models for all active symbols
-        self.online_learning.initialize_all_online_models(list(bot_instance.active_symbols))
+        # Enhanced initialization with bootstrap support
+        if BOOTSTRAP_AVAILABLE and hasattr(self.online_learning, 'initialize_all_online_models_with_bootstrap'):
+            bootstrap_report = self.online_learning.initialize_all_online_models_with_bootstrap(list(self.active_symbols))
+            print(f"🚀 [Bootstrap] Initialization completed:")
+            print(f"   - Symbols processed: {bootstrap_report['overall_stats']['successful_initializations']}/{bootstrap_report['total_symbols']}")
+            print(f"   - Bootstrap samples used: {bootstrap_report['overall_stats']['total_bootstrap_samples']}")
+            print(f"   - Processing time: {bootstrap_report['overall_stats']['total_initialization_time']:.2f}s")
+        else:
+            self.online_learning.initialize_all_online_models(list(self.active_symbols))
+            print("⚠️ [Bootstrap] Using standard initialization (Bootstrap not available)")
         
         # Check status of all Online Learning models
         self.online_learning.check_online_learning_status()
@@ -26327,11 +26347,45 @@ def run_comprehensive_symbol_evaluation():
 # ==============================================================================
 # 4. MAIN EXECUTION BLOCK
 # ==============================================================================
-# REPLACE THE if __name__ == "__main__": BLOCK WITH THIS
+# REPLACE THE 
+# Bootstrap Configuration Validation
+if BOOTSTRAP_AVAILABLE:
+    print("🔧 [Bootstrap] Validating configuration...")
+    config = ONLINE_LEARNING_BOOTSTRAP_CONFIG
+    
+    if config.get('ENABLE_BOOTSTRAP', False):
+        print(f"✅ [Bootstrap] Enabled with method: {config.get('BOOTSTRAP_METHOD', 'unknown')}")
+        print(f"   - Target samples: {config.get('BOOTSTRAP_SAMPLES', 0)}")
+        print(f"   - Historical lookback: {config.get('HISTORICAL_LOOKBACK', 0)} candles")
+        print(f"   - Parallel processing: {config.get('PARALLEL_BOOTSTRAP', False)}")
+    else:
+        print("⚠️ [Bootstrap] Available but disabled in configuration")
+else:
+    print("⚠️ [Bootstrap] Not available - using standard online learning")
+
+
+if __name__ == "__main__": BLOCK WITH THIS
 
 # FIND AND REPLACE ALL MAIN EXECUTION (MAIN) IN FILE WITH THIS
 
 # FIND AND REPLACE ALL MAIN EXECUTION IN FILE
+
+
+# Bootstrap Configuration Validation
+if BOOTSTRAP_AVAILABLE:
+    print("🔧 [Bootstrap] Validating configuration...")
+    config = ONLINE_LEARNING_BOOTSTRAP_CONFIG
+    
+    if config.get('ENABLE_BOOTSTRAP', False):
+        print(f"✅ [Bootstrap] Enabled with method: {config.get('BOOTSTRAP_METHOD', 'unknown')}")
+        print(f"   - Target samples: {config.get('BOOTSTRAP_SAMPLES', 0)}")
+        print(f"   - Historical lookback: {config.get('HISTORICAL_LOOKBACK', 0)} candles")
+        print(f"   - Parallel processing: {config.get('PARALLEL_BOOTSTRAP', False)}")
+    else:
+        print("⚠️ [Bootstrap] Available but disabled in configuration")
+else:
+    print("⚠️ [Bootstrap] Not available - using standard online learning")
+
 
 if __name__ == "__main__":
     print(" [MAIN] Starting bot initialization...")
@@ -26764,6 +26818,52 @@ def test_bot_after_fix():
         return False
 
 # === AUTO-FIX EXECUTION ===
+    def get_bootstrap_status_report(self):
+        """Get comprehensive bootstrap status report"""
+        if not BOOTSTRAP_AVAILABLE:
+            return {
+                'bootstrap_available': False,
+                'message': 'Bootstrap functionality not loaded'
+            }
+        
+        if hasattr(self.online_learning, 'get_bootstrap_status'):
+            status = self.online_learning.get_bootstrap_status()
+            status['bootstrap_available'] = True
+            return status
+        else:
+            return {
+                'bootstrap_available': True,
+                'message': 'Bootstrap available but not used in current online learning manager'
+            }
+    
+    def print_bootstrap_summary(self):
+        """Print a summary of bootstrap status"""
+        status = self.get_bootstrap_status_report()
+        
+        print("\n📊 BOOTSTRAP STATUS SUMMARY")
+        print("=" * 40)
+        
+        if not status.get('bootstrap_available', False):
+            print("❌ Bootstrap not available")
+            print(f"   Reason: {status.get('message', 'Unknown')}")
+            return
+        
+        if not status.get('bootstrap_history_available', False):
+            print("⚠️ Bootstrap available but not initialized yet")
+            return
+        
+        latest = status.get('latest_initialization', {})
+        overall_stats = latest.get('overall_stats', {})
+        
+        print("✅ Bootstrap Status: Active")
+        print(f"   Total models: {status.get('total_models', 0)}")
+        print(f"   Models with bootstrap: {status.get('models_with_bootstrap', 0)}")
+        print(f"   Last initialization:")
+        print(f"      - Symbols: {overall_stats.get('successful_initializations', 0)}/{overall_stats.get('total_symbols', 0)}")
+        print(f"      - Bootstrap samples: {overall_stats.get('total_bootstrap_samples', 0)}")
+        print(f"      - Success rate: {overall_stats.get('success_rate', 0):.1%}")
+        print(f"      - Avg samples/symbol: {overall_stats.get('average_samples_per_symbol', 0):.1f}")
+
 def run_auto_fix():
     """Ch y auto-fix khi needs thi t"""
     print(" AUTO-FIX DUPLICATE CLASS DEFINITIONS")
@@ -26791,6 +26891,23 @@ def run_auto_fix():
         print(" Manual fix required")
 
 # Run smoke test if this file is executed directly
+
+# Bootstrap Configuration Validation
+if BOOTSTRAP_AVAILABLE:
+    print("🔧 [Bootstrap] Validating configuration...")
+    config = ONLINE_LEARNING_BOOTSTRAP_CONFIG
+    
+    if config.get('ENABLE_BOOTSTRAP', False):
+        print(f"✅ [Bootstrap] Enabled with method: {config.get('BOOTSTRAP_METHOD', 'unknown')}")
+        print(f"   - Target samples: {config.get('BOOTSTRAP_SAMPLES', 0)}")
+        print(f"   - Historical lookback: {config.get('HISTORICAL_LOOKBACK', 0)} candles")
+        print(f"   - Parallel processing: {config.get('PARALLEL_BOOTSTRAP', False)}")
+    else:
+        print("⚠️ [Bootstrap] Available but disabled in configuration")
+else:
+    print("⚠️ [Bootstrap] Not available - using standard online learning")
+
+
 if __name__ == "__main__":
     print(" BOT STARTING...")
     
