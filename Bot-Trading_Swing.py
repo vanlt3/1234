@@ -5666,13 +5666,13 @@ class AutoRetrainManager:
         # Initialize online learning models for all active symbols
         # Enhanced initialization with bootstrap support
         if BOOTSTRAP_AVAILABLE and hasattr(self.online_learning, 'initialize_all_online_models_with_bootstrap'):
-            bootstrap_report = self.online_learning.initialize_all_online_models_with_bootstrap(list(self.active_symbols))
+            bootstrap_report = self.online_learning.initialize_all_online_models_with_bootstrap(list(self.bot.active_symbols))
             print(f"🚀 [Bootstrap] Initialization completed:")
             print(f"   - Symbols processed: {bootstrap_report['overall_stats']['successful_initializations']}/{bootstrap_report['total_symbols']}")
             print(f"   - Bootstrap samples used: {bootstrap_report['overall_stats']['total_bootstrap_samples']}")
             print(f"   - Processing time: {bootstrap_report['overall_stats']['total_initialization_time']:.2f}s")
         else:
-            self.online_learning.initialize_all_online_models(list(self.active_symbols))
+            self.online_learning.initialize_all_online_models(list(self.bot.active_symbols))
             print("⚠️ [Bootstrap] Using standard initialization (Bootstrap not available)")
         
         # Check status of all Online Learning models
