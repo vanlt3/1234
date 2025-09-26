@@ -2393,6 +2393,15 @@ except ImportError:
     TRADING_ECONOMICS_AVAILABLE = False
     te = None
 
+# Global flags to prevent spam logging of API errors
+API_ERROR_LOGGED = {
+    'trading_economics_403': False,
+    'trading_economics_401': False,
+    'news_api_404': False,
+    'marketaux_404': False,
+    'eodhd_401': False
+}
+
 # Check for other optional packages
 OPTIONAL_PACKAGES = {}
 
@@ -6305,8 +6314,11 @@ class NewsEconomicManager:
             except Exception as api_error:
                 error_msg = str(api_error)
                 if "403" in error_msg or "Forbidden" in error_msg:
-                    logging.warning("⚠️ Trading Economic API access forbidden (403) - API key may be invalid or rate limited")
-                    logging.warning("⚠️ Bot will continue without Trading Economics data")
+                    # Only log once to avoid spam
+                    if not API_ERROR_LOGGED['trading_economics_403']:
+                        logging.warning("⚠️ Trading Economic API access forbidden (403) - API key may be invalid or rate limited")
+                        logging.warning("⚠️ Bot will continue without Trading Economics data")
+                        API_ERROR_LOGGED['trading_economics_403'] = True
                     # Disable Trading Economics for this session to avoid repeated errors
                     try:
                         globals()['TRADING_ECONOMICS_AVAILABLE'] = False
@@ -6317,7 +6329,9 @@ class NewsEconomicManager:
                         pass
                     return []
                 elif "401" in error_msg or "Unauthorized" in error_msg:
-                    logging.warning("⚠️ Trading Economics API unauthorized (401) - API key may be invalid")
+                    if not API_ERROR_LOGGED['trading_economics_401']:
+                        logging.warning("⚠️ Trading Economics API unauthorized (401) - API key may be invalid")
+                        API_ERROR_LOGGED['trading_economics_401'] = True
                     return []
                 elif "429" in error_msg or "Too Many Requests" in error_msg:
                     logging.warning("⚠️ Trading Economic API rate limited (429) - too many requests")
@@ -9708,6 +9722,11 @@ class EnhancedDataManager:
         # Performance optimization: Cache for feature creation
         self._feature_cache = {}
         self._cache_ttl = 300  # 5 minutes cache TTL
+        
+        # Data fetching cache to avoid redundant API calls
+        self._data_cache = {}
+        self._data_cache_ttl = 600  # 10 minutes cache for data
+        self._last_cache_cleanup = time.time()
         self._max_cache_size = 50  # Maximum number of cached features
         
         # <<< TreceiveANG M I: Qu n l symbols needs retrain >>>
@@ -9812,7 +9831,23 @@ class EnhancedDataManager:
         return base_count
 
     def fetch_multi_timeframe_data(self, symbol, count=None, timeframes_to_use=None):
-        """Enhanced data fetching with asset class optimization"""
+        """Enhanced data fetching with asset class optimization and caching"""
+        # Clean old cache entries periodically
+        current_time = time.time()
+        if current_time - self._last_cache_cleanup > 300:  # Every 5 minutes
+            self._cleanup_data_cache()
+            self._last_cache_cleanup = current_time
+        
+        # Create cache key
+        cache_key = f"{symbol}_{count}_{str(timeframes_to_use)}"
+        
+        # Check cache first
+        if cache_key in self._data_cache:
+            cache_entry = self._data_cache[cache_key]
+            if current_time - cache_entry['timestamp'] < self._data_cache_ttl:
+                print(f"   [Data Cache] Using cached data for {symbol}")
+                return cache_entry['data']
+        
         all_data = {}
 
         # Getoptimal candle count for symbol
@@ -9887,7 +9922,31 @@ class EnhancedDataManager:
                 all_data[timeframe] = df
             except Exception as e:
                 print(f"Unexpected error {symbol} {timeframe}: {e}")
+        
+        # Cache the result if we got data
+        if all_data:
+            self._data_cache[cache_key] = {
+                'data': all_data,
+                'timestamp': current_time
+            }
+            print(f"   [Data Cache] Cached data for {symbol}")
+        
         return all_data
+    
+    def _cleanup_data_cache(self):
+        """Clean up expired cache entries"""
+        current_time = time.time()
+        expired_keys = []
+        
+        for key, entry in self._data_cache.items():
+            if current_time - entry['timestamp'] > self._data_cache_ttl:
+                expired_keys.append(key)
+        
+        for key in expired_keys:
+            del self._data_cache[key]
+        
+        if expired_keys:
+            print(f"   [Data Cache] Cleaned {len(expired_keys)} expired entries")
 
     def _get_oanda_instrument(self, symbol):
         """Enhanced instrumenfrom modelapping with all supported symbols"""
@@ -11645,11 +11704,11 @@ class RLPerformanceTracker:
     def get_adaptive_threshold(self, symbol):
         """Get adaptive confidence threshold based on performance"""
         if symbol not in self.symbol_performance:
-            return 0.47  # Reduced default threshold
+            return 0.25  # Much lower default threshold for more opportunities
             
         perf = self.symbol_performance[symbol]
         if perf['total_actions'] < 10:
-            return 0.47  # Not enough data, use lower threshold
+            return 0.25  # Not enough data, use lower threshold
             
         success_rate = perf['successful_actions'] / perf['total_actions']
         
@@ -15472,18 +15531,20 @@ class EnhancedTradingBot:
         self.portfolio_rl_agent = None
         self.drift_monitor = None
         
-        # Enhanced RL Flexibility Features - Reduced thresholds for more opportunities
+        # Enhanced RL Flexibility Features - Optimized thresholds for better signal generation
         self.adaptive_confidence_thresholds = {
-            'BTCUSD': 0.47,
-            'ETHUSD': 0.47, 
-            'XAUUSD': 0.50,  # Gold needs slightly higher confidence
-            'SPX500': 0.52,  # Index needs higher confidence
-            'EURUSD': 0.50,  # Forex needs slightly higher confidence
-            'DE40': 0.50,
-            'USOIL': 0.50,
-            'AUDUSD': 0.50,
-            'AUDNZD': 0.50
+            'BTCUSD': 0.25,   # Lowered from 0.47 for more opportunities
+            'ETHUSD': 0.25,   # Lowered from 0.47 for more opportunities
+            'XAUUSD': 0.30,   # Lowered from 0.50 - Gold needs slightly higher confidence
+            'SPX500': 0.35,   # Lowered from 0.52 - Index needs higher confidence  
+            'EURUSD': 0.30,   # Lowered from 0.50 - Forex needs slightly higher confidence
+            'DE40': 0.30,     # Lowered from 0.50
+            'USOIL': 0.30,    # Lowered from 0.50
+            'AUDUSD': 0.30,   # Lowered from 0.50
+            'AUDNZD': 0.30    # Lowered from 0.50
         }
+        
+        print("✅ [Bot Init] Optimized confidence thresholds for better signal generation")
         
         self.market_regime_detector = MarketRegimeDetector()
         self.rl_performance_tracker = RLPerformanceTracker()
@@ -15981,22 +16042,39 @@ class EnhancedTradingBot:
             return {'rl': 0.3, 'master': 0.3, 'ensemble': 0.2, 'online': 0.2}
     
     def _combine_decisions_unified(self, rl_action, rl_confidence, master_action, master_confidence, ensemble_action, ensemble_confidence, online_action, online_confidence, symbol):
-        """Unified decision combination for HOLD actions with simplified logic"""
+        """Unified decision combination for HOLD actions with improved confidence calculation"""
         try:
             # Equal weighting for HOLD actions to avoid bias
             weights = {'rl': 0.25, 'master': 0.25, 'ensemble': 0.25, 'online': 0.25}
             
-            # Weighted voting system
-            decisions = {
-                rl_action: rl_confidence * weights['rl'],
-                master_action: master_confidence * weights['master'],
-                ensemble_action: ensemble_confidence * weights['ensemble'],
-                online_action: online_confidence * weights['online']
-            }
+            # Collect all decisions and confidences
+            all_decisions = [
+                (rl_action, rl_confidence, weights['rl']),
+                (master_action, master_confidence, weights['master']),
+                (ensemble_action, ensemble_confidence, weights['ensemble']),
+                (online_action, online_confidence, weights['online'])
+            ]
             
-            # Select decision with highest weighted vote
-            final_decision = max(decisions, key=decisions.get)
-            final_confidence = decisions[final_decision]
+            # Group by decision type and calculate weighted average confidence
+            decision_scores = {}
+            for decision, confidence, weight in all_decisions:
+                if decision not in decision_scores:
+                    decision_scores[decision] = {'total_weight': 0, 'weighted_confidence': 0}
+                decision_scores[decision]['total_weight'] += weight
+                decision_scores[decision]['weighted_confidence'] += confidence * weight
+            
+            # Calculate final confidence for each decision
+            final_scores = {}
+            for decision, scores in decision_scores.items():
+                if scores['total_weight'] > 0:
+                    # Use average confidence instead of sum to avoid low values
+                    avg_confidence = scores['weighted_confidence'] / scores['total_weight']
+                    final_scores[decision] = avg_confidence * scores['total_weight']  # Weight by agreement
+            
+            # Select decision with highest score
+            final_decision = max(final_scores, key=final_scores.get)
+            # Calculate final confidence as average of supporting decisions
+            final_confidence = decision_scores[final_decision]['weighted_confidence'] / decision_scores[final_decision]['total_weight']
             
             # Apply consistency boost for unanimous decisions
             unique_decisions = set([rl_action, master_action, ensemble_action, online_action])
@@ -17930,11 +18008,10 @@ class EnhancedTradingBot:
                         print(f"   [RL Skip] {symbol_to_act}: RL quyt dnh {['HOLD', 'BUY', 'SELL'][action_code]} nhung d {current_signal} position - bqua")
                         continue
                 
-                # processing symbols c RL action BUY/SELL v not c position
-                print(f"   [Debug] {symbol_to_act}: action_code={action_code} ({['HOLD', 'BUY', 'SELL'][action_code]}), in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
-                logger.info(f" [Debug] {symbol_to_act}: action_code={action_code} ({['HOLD', 'BUY', 'SELL'][action_code]}), in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
-                logger.info(f" [Debug] Active symbols: {list(self.active_symbols)}")
-                logger.info(f" [Debug] Processing path for {symbol_to_act}: {'UNIFIED_PROCESSING' if symbol_to_act in self.active_symbols and not has_position else 'SKIP_OR_FALLBACK'}")
+                # Reduced debug logging to avoid spam - only log for non-HOLD actions
+                if action_code != 0:  # Only log for BUY/SELL actions
+                    logger.info(f" [Debug] {symbol_to_act}: action_code={action_code} ({['HOLD', 'BUY', 'SELL'][action_code]}), in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
+                    logger.info(f" [Debug] Processing path for {symbol_to_act}: {'UNIFIED_PROCESSING' if symbol_to_act in self.active_symbols and not has_position else 'SKIP_OR_FALLBACK'}")
                 
                 # UNIFIED PROCESSING: All active symbols go through Master Agent + Online Learning
                 if symbol_to_act in self.active_symbols and not has_position:
