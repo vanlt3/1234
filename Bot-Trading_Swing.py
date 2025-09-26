@@ -6287,7 +6287,6 @@ class NewsEconomicManager:
             
             if time_since_last_call < rate_limit:
                 wait_time = rate_limit - time_since_last_call
-                logging.info(f"⏱️ Rate limiting: waiting {wait_time:.1f}s before Trading Economics API call")
                 time.sleep(wait_time)
             
             # Update last call time
@@ -6866,7 +6865,6 @@ class NewsEconomicManager:
                 
                 if time_since_last_call < rate_limit:
                     wait_time = rate_limit - time_since_last_call
-                    logging.info(f"⏱️ Rate limiting: waiting {wait_time:.1f}s before Trading Economics API call")
                     time.sleep(wait_time)
                 
                 # Update last call time
