@@ -3552,11 +3552,12 @@ AUTO_RETRAIN_CONFIG = {
         "PERFORMANCE_DEGRADATION": True,  # Retrain when performance drops significantly
     },
     "RETRAIN_SETTINGS": {
-        "IMMEDIATE_RETRAIN": True,  # Retrain immediately when triggered
+        "IMMEDIATE_RETRAIN": False,  # CHANGED: Delay retrain to prevent frequent triggers
         "RETRAIN_ALL_SYMBOLS": False,  # Only retrain affected symbols
         "FORCE_FULL_RETRAIN": False,  # Force complete retraining (not incremental)
         "BACKUP_BEFORE_RETRAIN": True,  # Backup fromodels before retraining
         "NOTIFY_ON_RETRAIN": True,  # Send notification when retraining starts
+        "RETRAIN_COOLDOWN_HOURS": 6,  # NEW: Minimum hours between retrains for same symbol
     },
     "PERFORMANCE_THRESHOLDS": {
         "MIN_ACCURACY_THRESHOLD": 0.55,  # Minimum accuracy to trigger retrain
@@ -5456,10 +5457,10 @@ class ConceptDriftDetector:
     """Advanced concept drift detection with configurable sensitivity"""
     
     def __init__(self):
-        # Configurable thresholds for drift detection
-        self.data_drift_threshold = 0.01  # FIXED: Less sensitive (was 0.05)
-        self.performance_drift_threshold = 0.20  # 20% performance drop
-        self.feature_importance_threshold = 0.30  # 30% change in feature importance
+        # Configurable thresholds for drift detection - ADJUSTED FOR STABILITY
+        self.data_drift_threshold = 0.005  # More conservative threshold to reduce false positives
+        self.performance_drift_threshold = 0.25  # 25% performance drop (more tolerant)
+        self.feature_importance_threshold = 0.35  # 35% change in feature importance (more tolerant)
         
     def detect_drift(self, symbol, performance_data, data_samples, feature_importance):
         """
@@ -5849,11 +5850,26 @@ class AutoRetrainManager:
         return current_version != self.model_version
     
     def trigger_retrain(self, symbol, reason):
-        """Trigger retraining for a symbol"""
+        """Trigger retraining for a symbol with cooldown protection"""
+        # Check cooldown period
+        cooldown_hours = self.config["RETRAIN_SETTINGS"].get("RETRAIN_COOLDOWN_HOURS", 6)
+        last_retrain = self.last_retrain_time.get(symbol)
+        
+        if last_retrain:
+            time_since_last = datetime.now() - last_retrain
+            if time_since_last.total_seconds() < (cooldown_hours * 3600):
+                remaining_time = cooldown_hours * 3600 - time_since_last.total_seconds()
+                print(f"⏰ [Auto-Retrain] {symbol} in cooldown. Remaining: {remaining_time/3600:.1f}h")
+                return False
+        
         if not self.config["RETRAIN_SETTINGS"]["IMMEDIATE_RETRAIN"]:
+            print(f"📋 [Auto-Retrain] {symbol} scheduled for retrain: {reason}")
             return False
         
         print(f"🔄 [Auto-Retrain] Triggering retrain for {symbol}: {reason}")
+        
+        # Update last retrain time
+        self.last_retrain_time[symbol] = datetime.now()
         
         # Backup fromodels if enabled
         if self.config["RETRAIN_SETTINGS"]["BACKUP_BEFORE_RETRAIN"]:
