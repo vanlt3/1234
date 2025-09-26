@@ -24,7 +24,7 @@ except ImportError:
         'MIN_BOOTSTRAP_SAMPLES': 50,
         'CONSENSUS_THRESHOLD': 0.6,
         'CONSENSUS_WEIGHTS': {'rl': 0.35, 'master': 0.30, 'ensemble': 0.25, 'online': 0.10},
-        'HISTORICAL_LOOKBACK': 500,
+        'HISTORICAL_LOOKBACK': 5000,
         'FUTURE_RETURN_PERIODS': 10,
         'BUY_THRESHOLD': 0.015,
         'SELL_THRESHOLD': -0.015,
@@ -334,11 +334,11 @@ class OnlineLearningBootstrap:
         try:
             if hasattr(self.bot, 'data_manager') and self.bot.data_manager:
                 # Try to get data from bot's data manager
-                data = self.bot.data_manager.get_symbol_data(symbol, count=self.config.get('HISTORICAL_LOOKBACK', 500))
+                data = self.bot.data_manager.get_symbol_data(symbol, count=self.config.get('HISTORICAL_LOOKBACK', 5000))
                 return data
             elif hasattr(self.bot, 'get_symbol_data'):
                 # Try direct method
-                data = self.bot.get_symbol_data(symbol, count=self.config.get('HISTORICAL_LOOKBACK', 500))
+                data = self.bot.get_symbol_data(symbol, count=self.config.get('HISTORICAL_LOOKBACK', 5000))
                 return data
             else:
                 self.logger.warning(f"No data source available for {symbol}")

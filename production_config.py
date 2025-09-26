@@ -74,7 +74,7 @@ ONLINE_LEARNING_BOOTSTRAP_CONFIG = {
     },
     
     # Historical method settings
-    'HISTORICAL_LOOKBACK': 500,                  # Number of historical candles to analyze
+    'HISTORICAL_LOOKBACK': 5000,                 # Number of historical candles to analyze
     'FUTURE_RETURN_PERIODS': 10,                 # Look ahead periods for labeling
     'BUY_THRESHOLD': 0.015,                      # 1.5% return threshold for BUY label
     'SELL_THRESHOLD': -0.015,                    # -1.5% return threshold for SELL label
