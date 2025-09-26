@@ -3531,7 +3531,7 @@ ML_CONFIG = {
     "MAX_STD_F1": 0.20,    # Tăng từ 0.1 để linh hoạt hơn
     "CV_N_SPLITS": 5,      # Gi m t10 dtang t c
     "CONFIDENCE_THRESHOLD": 0.6,  # Tang t0.5 dch t chhon
-    "MIN_CONFIDENCE_TRADE": 0.50,  # Gi m t0.55 dlinh ho t hon
+    "MIN_CONFIDENCE_TRADE": 0.45,  # Reduced from 0.50 to increase trade opportunities
     "MIN_SAMPLES_FOR_TRAINING": 100,  # Gi m t300 dlinh ho t hon
     "MAX_CORRELATION_THRESHOLD": 0.85,  # Gi m t0.9 dch t chhon
     "EARLY_STOPPING_PATIENCE": 3,  # Ultra-strict: ttest results
@@ -11645,21 +11645,21 @@ class RLPerformanceTracker:
     def get_adaptive_threshold(self, symbol):
         """Get adaptive confidence threshold based on performance"""
         if symbol not in self.symbol_performance:
-            return 0.52  # Default threshold
+            return 0.47  # Reduced default threshold
             
         perf = self.symbol_performance[symbol]
         if perf['total_actions'] < 10:
-            return 0.52  # Not enough data
+            return 0.47  # Not enough data, use lower threshold
             
         success_rate = perf['successful_actions'] / perf['total_actions']
         
-        # Adjust threshold based on success rate
+        # Adjust threshold based on success rate (more aggressive)
         if success_rate > 0.7:
-            return 0.48  # Lower threshold for high-performing symbols
+            return 0.42  # Lower threshold for high-performing symbols
         elif success_rate < 0.4:
-            return 0.58  # Higher threshold for low-performing symbols
+            return 0.52  # Higher threshold for low-performing symbols
         else:
-            return 0.52  # Default threshold
+            return 0.47  # Reduced default threshold
 
 class DynamicActionSpace:
     """Dynamiofction space based on market conditions"""
@@ -15472,13 +15472,17 @@ class EnhancedTradingBot:
         self.portfolio_rl_agent = None
         self.drift_monitor = None
         
-        # Enhanced RL Flexibility Features
+        # Enhanced RL Flexibility Features - Reduced thresholds for more opportunities
         self.adaptive_confidence_thresholds = {
-            'BTCUSD': 0.52,
-            'ETHUSD': 0.52, 
-            'XAUUSD': 0.55,  # Gold needs higher confidence
-            'SPX500': 0.58,  # Index needs highest confidence
-            'EURUSD': 0.55   # Forex needs higher confidence
+            'BTCUSD': 0.47,
+            'ETHUSD': 0.47, 
+            'XAUUSD': 0.50,  # Gold needs slightly higher confidence
+            'SPX500': 0.52,  # Index needs higher confidence
+            'EURUSD': 0.50,  # Forex needs slightly higher confidence
+            'DE40': 0.50,
+            'USOIL': 0.50,
+            'AUDUSD': 0.50,
+            'AUDNZD': 0.50
         }
         
         self.market_regime_detector = MarketRegimeDetector()
@@ -15975,6 +15979,49 @@ class EnhancedTradingBot:
         except Exception as e:
             logging.error(f"Error calculating dynamic weights with online learning: {e}")
             return {'rl': 0.3, 'master': 0.3, 'ensemble': 0.2, 'online': 0.2}
+    
+    def _combine_decisions_unified(self, rl_action, rl_confidence, master_action, master_confidence, ensemble_action, ensemble_confidence, online_action, online_confidence, symbol):
+        """Unified decision combination for HOLD actions with simplified logic"""
+        try:
+            # Equal weighting for HOLD actions to avoid bias
+            weights = {'rl': 0.25, 'master': 0.25, 'ensemble': 0.25, 'online': 0.25}
+            
+            # Weighted voting system
+            decisions = {
+                rl_action: rl_confidence * weights['rl'],
+                master_action: master_confidence * weights['master'],
+                ensemble_action: ensemble_confidence * weights['ensemble'],
+                online_action: online_confidence * weights['online']
+            }
+            
+            # Select decision with highest weighted vote
+            final_decision = max(decisions, key=decisions.get)
+            final_confidence = decisions[final_decision]
+            
+            # Apply consistency boost for unanimous decisions
+            unique_decisions = set([rl_action, master_action, ensemble_action, online_action])
+            if len(unique_decisions) == 1:
+                final_confidence *= 1.2  # 20% boost for unanimous
+            elif len(unique_decisions) == 2:
+                final_confidence *= 1.1  # 10% boost for majority
+            
+            # Clamp confidence
+            final_confidence = max(0.1, min(0.95, final_confidence))
+            
+            # Log decision combination
+            logger = BOT_LOGGERS['RLStrategy']
+            logger.info(f" [Unified Decision Fusion] {symbol}:")
+            logger.info(f"   - RL: {rl_action} ({rl_confidence:.2%}) [Weight: {weights['rl']:.2f}]")
+            logger.info(f"   - Master: {master_action} ({master_confidence:.2%}) [Weight: {weights['master']:.2f}]")
+            logger.info(f"   - Ensemble: {ensemble_action} ({ensemble_confidence:.2%}) [Weight: {weights['ensemble']:.2f}]")
+            logger.info(f"   - Online: {online_action} ({online_confidence:.2%}) [Weight: {weights['online']:.2f}]")
+            logger.info(f"   - Final: {final_decision} ({final_confidence:.2%})")
+            
+            return final_decision, final_confidence
+            
+        except Exception as e:
+            logging.error(f"Error combining unified decisions: {e}")
+            return "HOLD", 0.5
     
     def _calculate_decision_consistency_with_online_learning(self, rl_action, master_action, ensemble_action, online_action):
         """Calculate consistency factor including online learning"""
@@ -17884,137 +17931,146 @@ class EnhancedTradingBot:
                         continue
                 
                 # processing symbols c RL action BUY/SELL v not c position
-                print(f"   [Debug] {symbol_to_act}: action_code={action_code}, in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
-                logger.info(f" [Debug] {symbol_to_act}: action_code={action_code}, in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
+                print(f"   [Debug] {symbol_to_act}: action_code={action_code} ({['HOLD', 'BUY', 'SELL'][action_code]}), in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
+                logger.info(f" [Debug] {symbol_to_act}: action_code={action_code} ({['HOLD', 'BUY', 'SELL'][action_code]}), in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
                 logger.info(f" [Debug] Active symbols: {list(self.active_symbols)}")
+                logger.info(f" [Debug] Processing path for {symbol_to_act}: {'UNIFIED_PROCESSING' if symbol_to_act in self.active_symbols and not has_position else 'SKIP_OR_FALLBACK'}")
                 
-                # Process all symbols through Online Learning (including HOLD actions)
-                if symbol_to_act in self.active_symbols:
-                    # Always process through Online Learning for all active symbols
+                # UNIFIED PROCESSING: All active symbols go through Master Agent + Online Learning
+                if symbol_to_act in self.active_symbols and not has_position:
+                    # Get symbol data
                     symbol_data = live_data_cache.get(symbol_to_act, pd.DataFrame())
                     
-                    # Get Online Learning prediction for this symbol
+                    # Always process through Online Learning for all active symbols
                     online_decision, online_confidence = self.auto_retrain_manager.online_learning.get_online_prediction_enhanced(
                         symbol_to_act, symbol_data
                     )
-                    
                     logger.info(f"🔄 [Online Learning] {symbol_to_act}: Decision={online_decision}, Confidence={online_confidence:.2%}")
                     print(f"   [Online Learning] {symbol_to_act}: Decision={online_decision}, Confidence={online_confidence:.2%}")
                 
-                # Only proceed with full analysis for BUY/SELL actions without existing positions
-                if action_code in [1, 2] and symbol_to_act in self.active_symbols and not has_position:
-                    print(f"   [Debug] {symbol_to_act}: conditions met, starting Master Agent processing")
-                    # Enhanced action decoding with market regime
-                    market_regime, regime_confidence = self.market_regime_detector.detect_regime(live_data_cache.get(symbol_to_act, pd.DataFrame()))
-                    
-                    # Calculate volatility for dynamic action space
-                    symbol_data = live_data_cache.get(symbol_to_act, pd.DataFrame())
-                    volatility = symbol_data['close'].pct_change().std() * 100 if len(symbol_data) > 0 else 2.0
-                    
-                    # Get dynamic action space
-                    available_actions = self.dynamic_action_space.get_action_space(symbol_to_act, market_regime, volatility)
-                    
-                    # Decode action with enhanced logic
-                    action_name, confidence_multiplier = self.dynamic_action_space.decode_action(action_code, symbol_to_act, market_regime)
-                    
-                    # Apply adaptive confidence threshold
-                    adaptive_threshold = self.rl_performance_tracker.get_adaptive_threshold(symbol_to_act)
-                    adjusted_confidence = confidence * confidence_multiplier
-                    
-                    # Apply Transfer Learning
-                    source_symbols = [s for s in self.active_symbols if s != symbol_to_act]
-                    if source_symbols:
-                        source_performance = {s: self.rl_performance_tracker.symbol_performance.get(s, {}).get('successful_actions', 0) / max(1, self.rl_performance_tracker.symbol_performance.get(s, {}).get('total_actions', 1)) for s in source_symbols}
-                        transferred_performance, transfer_weights = self.transfer_learning_manager.transfer_knowledge(symbol_to_act, source_symbols, source_performance)
-                        
-                        # Adjust confidence based on transferred knowledge
-                        transfer_multiplier = 1.0 + (transferred_performance - 0.5) * 0.2  # 10% adjustment
-                        adjusted_confidence *= transfer_multiplier
-                    
-                    # Apply Master Agent Coordination
-                    logger.info(f" [Master Agent] Starting analysis for {symbol_to_act}")
-                    print(f"   [Master Agent] Starting analysis for {symbol_to_act}")
+                    # ALWAYS apply Master Agent Coordination for all symbols (not just BUY/SELL)
+                    logger.info(f" [Master Agent] Starting unified analysis for {symbol_to_act}")
+                    print(f"   [Master Agent] Starting unified analysis for {symbol_to_act}")
                     print(f"   [Debug] Master Agent Coordinator: {self.master_agent_coordinator}")
+                    print(f"   [Debug] Symbol data shape: {symbol_data.shape if not symbol_data.empty else 'EMPTY'}")
                     
                     try:
                         master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                             'trading_decision', symbol_data, symbol_to_act
                         )
-                        logger.info(f" [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
-                        print(f"   [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
+                        logger.info(f" [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
+                        print(f"   [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
                     except Exception as e:
-                        logger.error(f"[Master Agent] Error analyzing {symbol_to_act}: {e}")
-                        print(f"   [Master Agent] Error analyzing {symbol_to_act}: {e}")
+                        logger.error(f"[Master Agent] ❌ Error analyzing {symbol_to_act}: {e}")
+                        print(f"   [Master Agent] ❌ Error analyzing {symbol_to_act}: {e}")
                         master_decision, master_confidence = "HOLD", 0.5
                     
-                    # Apply Advanced Ensemble Prediction
+                    # Apply Advanced Ensemble Prediction for all symbols
                     ensemble_decision, ensemble_confidence = self.ensemble_manager.predict_ensemble(
                         symbol_data, symbol_to_act
                     )
-                    
-                    # Combine RL, Master Agent, Ensemble, v Online Learning decisions
-                    final_decision, final_confidence = self._combine_all_decisions_with_online_learning(
-                        action_name, adjusted_confidence,
-                        master_decision, master_confidence,
-                        ensemble_decision, ensemble_confidence,
-                        online_decision, online_confidence,
-                        symbol_to_act
-                    )
-                    
-                    logger.info(f" [RL Strategy] Enhanced decision for {symbol_to_act}:")
-                    logger.info(f"   - RL Action: {action_name} (confidence: {adjusted_confidence:.2%})")
-                    logger.info(f"   - Master Agent: {master_decision} (confidence: {master_confidence:.2%})")
-                    logger.info(f"   - Ensemble: {ensemble_decision} (confidence: {ensemble_confidence:.2%})")
-                    logger.info(f"   - Online Learning: {online_decision} (confidence: {online_confidence:.2%})")
-                    logger.info(f"   - Final Decision: {final_decision} (confidence: {final_confidence:.2%})")
-                    logger.info(f"   - Market Regime: {market_regime} (confidence: {regime_confidence:.2%})")
-                    logger.info(f"   - Volatility: {volatility:.2f}%")
-                    logger.info(f"   - Available Actions: {available_actions}")
-                    logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
-                    if source_symbols:
-                        logger.info(f"   - Transfer Learning: {transferred_performance:.2%} from {len(source_symbols)} symbols")
-                    
-                    # Check confidence threshold
-                    if final_confidence >= adaptive_threshold and symbol_to_act not in self.open_positions:
-                        logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
-                        tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
-                    elif final_confidence >= adaptive_threshold and symbol_to_act in self.open_positions:
-                        logger.info(f"[RL Strategy] Skipping {symbol_to_act}: Already has open position")
-                    else:
-                        logger.info(f" [RL Strategy] {symbol_to_act}: Final Confidence {final_confidence:.2%} < Threshold {adaptive_threshold:.2%}")
-                    
-                    # Trigger online learning feedback loop
-                    self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
                 
-                # processing symbols c confidence cao nhung RL action = HOLD (fallback analysis)
-                elif action_code == 0 and symbol_to_act in self.active_symbols and symbol_to_act not in self.open_positions:
-                    if confidence > 0.52:  # Confidence threshold cho fallback analysis
-                        print(f"   [Debug] {symbol_to_act}: RL=HOLD nhung confidence cao, starting Master Agent processing")
-                        logger.info(f" [Master Agent] Starting analysis for {symbol_to_act}")
-                        print(f"   [Master Agent] Starting analysis for {symbol_to_act}")
-                        print(f"   [Debug] Master Agent Coordinator: {self.master_agent_coordinator}")
+                    # Enhanced processing based on RL action type
+                    if action_code in [1, 2]:  # BUY/SELL actions get full enhanced processing
+                        print(f"   [Debug] {symbol_to_act}: BUY/SELL action, applying enhanced processing")
                         
-                        try:
-                            master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
-                                'trading_decision', live_data_cache.get(symbol_to_act, pd.DataFrame()), symbol_to_act
-                            )
-                            logger.info(f" [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
-                            print(f"   [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
-                        except Exception as e:
-                            logger.error(f"[Master Agent] Error analyzing {symbol_to_act}: {e}")
-                            print(f"   [Master Agent] Error analyzing {symbol_to_act}: {e}")
-                            master_decision, master_confidence = "HOLD", 0.5
+                        # Enhanced action decoding with market regime
+                        market_regime, regime_confidence = self.market_regime_detector.detect_regime(symbol_data)
+                        
+                        # Calculate volatility for dynamic action space
+                        volatility = symbol_data['close'].pct_change().std() * 100 if len(symbol_data) > 0 else 2.0
+                        
+                        # Get dynamic action space
+                        available_actions = self.dynamic_action_space.get_action_space(symbol_to_act, market_regime, volatility)
+                        
+                        # Decode action with enhanced logic
+                        action_name, confidence_multiplier = self.dynamic_action_space.decode_action(action_code, symbol_to_act, market_regime)
+                        
+                        # Apply adaptive confidence threshold
+                        adaptive_threshold = self.rl_performance_tracker.get_adaptive_threshold(symbol_to_act)
+                        adjusted_confidence = confidence * confidence_multiplier
+                        
+                        # Apply Transfer Learning
+                        source_symbols = [s for s in self.active_symbols if s != symbol_to_act]
+                        if source_symbols:
+                            source_performance = {s: self.rl_performance_tracker.symbol_performance.get(s, {}).get('successful_actions', 0) / max(1, self.rl_performance_tracker.symbol_performance.get(s, {}).get('total_actions', 1)) for s in source_symbols}
+                            transferred_performance, transfer_weights = self.transfer_learning_manager.transfer_knowledge(symbol_to_act, source_symbols, source_performance)
+                            
+                            # Adjust confidence based on transferred knowledge
+                            transfer_multiplier = 1.0 + (transferred_performance - 0.5) * 0.2  # 10% adjustment
+                            adjusted_confidence *= transfer_multiplier
+                        
+                        # Combine RL, Master Agent, Ensemble, and Online Learning decisions
+                        final_decision, final_confidence = self._combine_all_decisions_with_online_learning(
+                            action_name, adjusted_confidence,
+                            master_decision, master_confidence,
+                            ensemble_decision, ensemble_confidence,
+                            online_decision, online_confidence,
+                            symbol_to_act
+                        )
+                        
+                        logger.info(f" [RL Strategy] Enhanced decision for {symbol_to_act}:")
+                        logger.info(f"   - RL Action: {action_name} (confidence: {adjusted_confidence:.2%})")
+                        logger.info(f"   - Master Agent: {master_decision} (confidence: {master_confidence:.2%})")
+                        logger.info(f"   - Ensemble: {ensemble_decision} (confidence: {ensemble_confidence:.2%})")
+                        logger.info(f"   - Online Learning: {online_decision} (confidence: {online_confidence:.2%})")
+                        logger.info(f"   - Final Decision: {final_decision} (confidence: {final_confidence:.2%})")
+                        logger.info(f"   - Market Regime: {market_regime} (confidence: {regime_confidence:.2%})")
+                        logger.info(f"   - Volatility: {volatility:.2f}%")
+                        logger.info(f"   - Available Actions: {available_actions}")
+                        logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
+                        if source_symbols:
+                            logger.info(f"   - Transfer Learning: {transferred_performance:.2%} from {len(source_symbols)} symbols")
+                        
+                        # Check confidence threshold
+                        if final_confidence >= adaptive_threshold:
+                            logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
+                            tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
+                        else:
+                            logger.info(f" [RL Strategy] {symbol_to_act}: Final Confidence {final_confidence:.2%} < Threshold {adaptive_threshold:.2%}")
+                        
+                        # Trigger online learning feedback loop
+                        self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
+                    
+                    elif action_code == 0:  # HOLD actions get simplified processing
+                        print(f"   [Debug] {symbol_to_act}: HOLD action, applying unified processing")
+                        
+                        # For HOLD actions, use simple decision combination
+                        action_name = "HOLD"
+                        adjusted_confidence = confidence
+                        adaptive_threshold = max(0.40, self.rl_performance_tracker.get_adaptive_threshold(symbol_to_act) - 0.05)  # Lower threshold for HOLD
+                        
+                        # Combine decisions with equal weighting for HOLD actions
+                        final_decision, final_confidence = self._combine_decisions_unified(
+                            action_name, adjusted_confidence,
+                            master_decision, master_confidence,
+                            ensemble_decision, ensemble_confidence,
+                            online_decision, online_confidence,
+                            symbol_to_act
+                        )
+                        
+                        logger.info(f" [RL Strategy] Unified decision for {symbol_to_act}:")
+                        logger.info(f"   - RL Action: {action_name} (confidence: {adjusted_confidence:.2%})")
+                        logger.info(f"   - Master Agent: {master_decision} (confidence: {master_confidence:.2%})")
+                        logger.info(f"   - Ensemble: {ensemble_decision} (confidence: {ensemble_confidence:.2%})")
+                        logger.info(f"   - Online Learning: {online_decision} (confidence: {online_confidence:.2%})")
+                        logger.info(f"   - Final Decision: {final_decision} (confidence: {final_confidence:.2%})")
+                        logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
+                        
+                        # Check confidence threshold
+                        if final_confidence >= adaptive_threshold and final_decision != "HOLD":
+                            logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
+                            tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
+                        else:
+                            logger.info(f" [RL Strategy] {symbol_to_act}: No action taken - {final_decision} ({final_confidence:.2%}) < Threshold {adaptive_threshold:.2%}")
+                        
+                        # Trigger online learning feedback loop
+                        self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
                 
-                # Ly tn hiu t Ensemble model lm fallback
-                try:
-                    signal, ensemble_confidence, _ = self.get_enhanced_signal(symbol_to_act, df_features=live_data_cache.get(symbol_to_act))
-                    if signal and ensemble_confidence > ML_CONFIG["MIN_CONFIDENCE_TRADE"] and symbol_to_act not in self.open_positions:
-                        print(f"   [RL Fallback] {symbol_to_act}: RL=HOLD, Ensemble={signal} ({ensemble_confidence:.2%})")
-                        tasks.append(self.handle_position_logic(symbol_to_act, signal, ensemble_confidence))
-                    elif signal and ensemble_confidence > ML_CONFIG["MIN_CONFIDENCE_TRADE"] and symbol_to_act in self.open_positions:
-                        print(f"   [RL Fallback] {symbol_to_act}: Skipping - Already has open position")
-                except Exception as e:
-                    print(f"   [RL Fallback] Error in fallback analysis for {symbol_to_act}: {e}")
+                # Skip symbols with existing positions
+                elif has_position:
+                    logger.info(f" [RL Strategy] {symbol_to_act}: Skipping - Already has open position")
+                    print(f"   [RL Strategy] {symbol_to_act}: Skipping - Already has open position")
 
             # FALLBACK: Check cc active symbols khng trong RL Agent
             symbols_not_in_rl = self.active_symbols - set(symbols_agent_knows)
@@ -18067,6 +18123,18 @@ class EnhancedTradingBot:
                 print(f"   [Async Execution] Executing {len(tasks)} trading signals...")
                 await asyncio.gather(*tasks)
                 logger.info(f"[RL Strategy] Completed executing {len(tasks)} trading signals")
+            else:
+                logger.info(f"[RL Strategy] No trading signals generated this cycle")
+                print(f"   [RL Strategy] No trading signals generated this cycle")
+            
+            # Summary logging
+            logger.info(f"[RL Strategy] CYCLE SUMMARY:")
+            logger.info(f"   - Total symbols processed: {len(active_symbols_to_process)}")
+            logger.info(f"   - Symbols in RL Agent: {len(symbols_agent_knows)}")
+            logger.info(f"   - Symbols not in RL: {len(self.active_symbols - set(symbols_agent_knows))}")
+            logger.info(f"   - Trading signals generated: {len(tasks)}")
+            logger.info(f"   - Current open positions: {len(self.open_positions)}")
+            print(f"   [RL Strategy] CYCLE SUMMARY: {len(active_symbols_to_process)} processed, {len(tasks)} signals, {len(self.open_positions)} positions")
                 
                 # --- BU C 4: Check CONCEPT DRIFT SAU KHI T T CSYMBOLS  U C analysis ---
                 await self.check_concept_drift_for_processed_symbols(active_symbols_to_process)
