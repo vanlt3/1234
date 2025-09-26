@@ -18250,11 +18250,9 @@ class EnhancedTradingBot:
                 if len(df_primary_tf) < min_required_data:
                     self._log_and_print("warning", f"Insufficient data for enhanced risk management for {symbol}: {len(df_primary_tf)} candles, need {min_required_data}")
                     # Return fallback values
-                    return {
-                        "position_size": 0.01,
-                        "stop_loss": current_price * 0.98 if signal == "BUY" else current_price * 1.02,
-                        "take_profit": current_price * 1.02 if signal == "BUY" else current_price * 0.98
-                    }
+                    fallback_sl = current_price * 0.98 if signal == "BUY" else current_price * 1.02
+                    fallback_tp = current_price * 1.02 if signal == "BUY" else current_price * 0.98
+                    return fallback_tp, fallback_sl
                 
                 # Use a smaller window if we don't have enough data
                 atr_window = min(RISK_MANAGEMENT["VOLATILITY_LOOKBACK"], len(df_primary_tf) - 1)
