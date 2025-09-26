@@ -5652,8 +5652,16 @@ class AutoRetrainManager:
         # Initialize concept drift detection
         self.drift_detector = ConceptDriftDetector()
         
-        # Initialize online learning
-        self.online_learning = OnlineLearningManager(bot_instance)
+        # Initialize online learning with bootstrap support
+        if BOOTSTRAP_AVAILABLE:
+            try:
+                self.online_learning = create_enhanced_online_learning_manager(bot_instance)
+                print("✅ [Bootstrap] EnhancedOnlineLearningManager initialized")
+            except Exception as e:
+                print(f"⚠️ [Bootstrap] Failed to initialize enhanced manager, using standard: {e}")
+                self.online_learning = OnlineLearningManager(bot_instance)
+        else:
+            self.online_learning = OnlineLearningManager(bot_instance)
         
         # Initialize online learning models for all active symbols
         # Enhanced initialization with bootstrap support
