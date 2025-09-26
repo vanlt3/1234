@@ -18,6 +18,29 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 print("🔧 [Encoding] UTF-8 encoding configured successfully")
 
+# ==================================================
+# SUPPRESS CUDA/GPU WARNINGS AND TENSORFLOW LOGS
+# ==================================================
+# Suppress TensorFlow warnings and CUDA registration messages
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TensorFlow INFO and WARNING messages
+os.environ['CUDA_VISIBLE_DEVICES'] = ''   # Disable CUDA if not needed for faster startup
+
+# Suppress specific CUDA warnings
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='.*cuda.*')
+warnings.filterwarnings('ignore', category=FutureWarning, module='.*tensorflow.*')
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='.*gym.*')
+warnings.filterwarnings('ignore', category=UserWarning, module='.*gymnasium.*')
+warnings.filterwarnings('ignore', category=FutureWarning, module='.*numpy.*')
+
+# Suppress JAX warnings
+os.environ['JAX_PLATFORMS'] = 'cpu'  # Force JAX to use CPU only
+
+# Suppress Gym deprecation warnings
+os.environ['GYM_IGNORE_DEPRECATION_WARNINGS'] = '1'
+
+print("🔧 [GPU] CUDA/GPU warnings suppressed")
+
 import asyncio
 import copy
 import json
@@ -3659,8 +3682,8 @@ PERFORMANCE_THRESHOLDS = {
 
 # === OPTUNA (Enhanced Optimization) ===
 OPTUNA_CONFIG = {
-    "N_TRIALS": 200,        # Increase trials to find better parameters
-    "TIMEOUT_SEC": 1800,    # Increase timeout to have enough time for optimization
+    "N_TRIALS": 50,         # Reduced from 200 to 50 for faster training
+    "TIMEOUT_SEC": 600,     # Reduced from 1800 to 600 seconds (10 minutes)
     "PRUNING_ENABLED": True, # Enable pruning to remove poor trials
     "SAMPLER": "TPE",        # Tree-structured Parzen Estimator
     "EARLY_STOPPING_ROUNDS": 15,  # Increase early stopping rounds
@@ -5334,8 +5357,27 @@ class OnlineLearningManager:
                     'consistency_scores': [feedback_data.get('decision_consistency', 1.0)]
                 }
                 
-                # Check drift
-                drift_result = drift_detector.detect_drift(symbol, performance_data=performance_data)
+                # Check drift - provide all required arguments
+                try:
+                    # Get additional required data for drift detection
+                    data_samples = {
+                        'new': [feedback_data.get('final_confidence', 0.5)],
+                        'old': [0.5]  # Default baseline
+                    }
+                    feature_importance = {
+                        'new': {'confidence': feedback_data.get('final_confidence', 0.5)},
+                        'old': {'confidence': 0.5}
+                    }
+                    
+                    drift_result = drift_detector.detect_drift(
+                        symbol, 
+                        performance_data=performance_data,
+                        data_samples=data_samples,
+                        feature_importance=feature_importance
+                    )
+                except Exception as drift_error:
+                    logging.error(f"Error in drift detection for {symbol}: {drift_error}")
+                    drift_result = None
                 
                 if drift_result and drift_result.get('should_retrain', False):
                     logging.warning(f"⚠️ [Concept Drift] Detected drift for {symbol}: {drift_result.get('reason', 'Unknown')}")
@@ -6865,6 +6907,8 @@ class NewsEconomicManager:
                     print("✅ [API Test] Marketaux API: Connected")
                 else:
                     print(f"📊 [API Test] Marketaux API: HTTP {response.status_code}")
+                    if response.status_code == 404:
+                        API_ERROR_LOGGED['marketaux_404'] = True
             
             # Test NewsAPI
             if any(isinstance(p, NewsApiOrgProvider) and p.enabled for p in self.news_providers):
@@ -6874,6 +6918,8 @@ class NewsEconomicManager:
                     print("✅ [API Test] NewsAPI: Connected")
                 else:
                     print(f"📊 [API Test] NewsAPI: HTTP {response.status_code}")
+                    if response.status_code == 404:
+                        API_ERROR_LOGGED['news_api_404'] = True
             
             # Test EODHD API
             if any(isinstance(p, EODHDProvider) and p.enabled for p in self.news_providers):
@@ -6883,6 +6929,8 @@ class NewsEconomicManager:
                     print("✅ [API Test] EODHD API: Connected")
                 else:
                     print(f"📊 [API Test] EODHD API: HTTP {response.status_code}")
+                    if response.status_code == 401:
+                        API_ERROR_LOGGED['eodhd_401'] = True
                     
         except Exception as e:
             print(f" [API Test] Error testing API connectivity: {e}")
@@ -18050,7 +18098,7 @@ class EnhancedTradingBot:
                     direction="maximize"
                 )
                 
-                study.optimize(lambda trial: self._objective_rl_portfolio(trial, train_env, val_env), n_trials=100)
+                study.optimize(lambda trial: self._objective_rl_portfolio(trial, train_env, val_env), n_trials=25)  # Reduced from 100 to 25
                 best_params = study.best_params
                 print(f"   [Optuna] Optimal parameters found: {best_params}")
 
