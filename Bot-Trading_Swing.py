@@ -18842,7 +18842,20 @@ class EnhancedTradingBot:
         if force_retrain_symbols is None:
             force_retrain_symbols = []
 
-        # <<< TreceiveANG M I: Check symbols needs retrain do stale data >>>
+        # <<< NEW: Check if models exist, if not force retrain all >>>
+        missing_models = []
+        for symbol in SYMBOLS:
+            trending_model = load_latest_model(symbol, "ensemble_trending")
+            ranging_model = load_latest_model(symbol, "ensemble_ranging")
+            if not trending_model or not ranging_model:
+                missing_models.append(symbol)
+        
+        if missing_models:
+            print(f"🚨 [Auto-Train] No models found for {len(missing_models)} symbols: {missing_models}")
+            print(f"🔄 [Auto-Train] Will train models for all missing symbols...")
+            force_retrain_symbols.extend(missing_models)
+
+        # <<< ORIGINAL: Check symbols needs retrain do stale data >>>
         stale_symbols = self.data_manager.get_stale_symbols()
         if stale_symbols:
             print(f"🔄 [Auto-Retrain] Detected {len(stale_symbols)} symbols need retraining due to stale data: {stale_symbols}")
