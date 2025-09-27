@@ -443,22 +443,22 @@ class SymbolConfig:
 # Refactored API configuration
 API_CONFIGS: Dict[str, APIConfig] = {
     'FINHUB': APIConfig(
-        api_key='sandbox_ctpd2gpr01qm8hq4bfh0_sandbox_ctpd2gpr01qm8hq4bfhg',  # Free sandbox key
+        api_key='d1b3ichr01qjhvtsbj8g',  # Real Finnhub API key
         base_url='https://finnhub.io/api/v1',  # Fixed URL
         rate_limit=60
     ),
     'MARKETAUX': APIConfig(
-        api_key='demo',  # Demo key for testing
+        api_key='CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql',  # Real Marketaux API key
         base_url='https://api.marketaux.com/v1',
         rate_limit=100
     ),
     'NEWSAPI': APIConfig(
-        api_key='demo',  # Demo key for testing
+        api_key='abd8f43b808f42fdb8d28fb1c429af72',  # Real NewsAPI key
         base_url='https://newsapi.org/v2',
         rate_limit=1000
     ),
     'EODHD': APIConfig(
-        api_key='demo',  # Demo key for testing
+        api_key='68bafd7d44a7f0.25202650',  # Real EODHD API key
         base_url='https://eodhistoricaldata.com/api',
         rate_limit=20
     ),
@@ -3550,9 +3550,9 @@ ASSET_CLASS_GROUPS = {
     "crypto": ["BTCUSD", "ETHUSD"],
 }
 # (Add near other configuration variables like OANDA_API_KEY)
-EODHD_API_KEY = " 68bafd7d44a7f025202650"
+EODHD_API_KEY = "68bafd7d44a7f0.25202650"
 NEWSAPI_ORG_API_KEY = "abd8f43b808f42fdb8d28fb1c429af72"
-FINNHUB_API_KEY = "d1b3ichr01qjhvtsbj70d1b3ichr01qjhvtsbj7g"
+FINNHUB_API_KEY = "d1b3ichr01qjhvtsbj8g"
 MARKETAUX_API_KEY = "CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql"
 
 # Auto-Retrain Configuration

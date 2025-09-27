@@ -10,10 +10,10 @@ from typing import Dict, Any
 
 PRODUCTION_API_KEYS = {
     # Trading APIs
-    'FINHUB': os.getenv('FINNHUB_API_KEY', 'your_finnhub_api_key_here'),
-    'MARKETAUX': os.getenv('MARKETAUX_API_KEY', 'your_marketaux_api_key_here'),
-    'NEWSAPI': os.getenv('NEWSAPI_KEY', 'your_newsapi_key_here'),
-    'EODHD': os.getenv('EODHD_API_KEY', 'your_eodhd_api_key_here'),
+    'FINHUB': os.getenv('FINNHUB_API_KEY', 'd1b3ichr01qjhvtsbj8g'),
+    'MARKETAUX': os.getenv('MARKETAUX_API_KEY', 'CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql'),
+    'NEWSAPI': os.getenv('NEWSAPI_KEY', 'abd8f43b808f42fdb8d28fb1c429af72'),
+    'EODHD': os.getenv('EODHD_API_KEY', '68bafd7d44a7f0.25202650'),
     
     # Economic Data
     'TRADING_ECONOMICS': os.getenv('TRADING_ECONOMICS_API_KEY', 'your_te_api_key_here'),
