@@ -2623,14 +2623,22 @@ def is_market_open(symbol, current_time=None):
         bool: True if market is open, False otherwise
     """
     try:
+        # Debug logging for troubleshooting
+        is_crypto = is_crypto_symbol(symbol)
+        is_wknd = is_weekend()
+        
         # Crypto symbols trade 24/7
-        if is_crypto_symbol(symbol):
+        if is_crypto:
+            print(f"   [Market Debug] {symbol} is crypto -> Always open")
             return True
         
         # For other symbols, check if it's weekend
-        return not is_weekend()
+        result = not is_wknd
+        print(f"   [Market Debug] {symbol} is not crypto, weekend={is_wknd} -> {'Open' if result else 'Closed'}")
+        return result
     except Exception as e:
         logging.warning(f"Market open check error for {symbol}: {e}")
+        print(f"   [Market Debug] Error checking {symbol}, defaulting to appropriate fallback")
         # Fallback: assume market is open for crypto, closed for others on weekend
         if is_crypto_symbol(symbol):
             return True
@@ -7834,6 +7842,10 @@ class NewsEconomicManager:
         except Exception as e:
             print(f"❌ [News Reader] Error reading news from file: {e}")
             return None
+    
+    def get_latest_news(self):
+        """Get latest news data - alias for get_latest_news_summary for compatibility"""
+        return self.get_latest_news_summary()
     
     def get_latest_news_summary(self):
         """Get summary of latest news for bot consumption"""
@@ -19032,21 +19044,35 @@ class EnhancedTradingBot:
 
             # Special handling for crypto symbols - always activate if market is open
             crypto_fallback_activated = False
+            print(f"   [Debug] Activation check for {symbol}:")
+            print(f"   [Debug]   - is_symbol_active: {is_symbol_active}")
+            print(f"   [Debug]   - is_crypto_symbol({symbol}): {is_crypto_symbol(symbol)}")
+            print(f"   [Debug]   - is_market_open({symbol}): {is_market_open(symbol)}")
+            print(f"   [Debug]   - Condition result: {is_symbol_active or (is_crypto_symbol(symbol) and is_market_open(symbol))}")
+            
             if is_symbol_active or (is_crypto_symbol(symbol) and is_market_open(symbol)):
-                self.active_symbols.add(symbol)
-                if is_symbol_active:
-                    print(f"  ✅ Symbol {symbol} has been activated (with models).")
-                else:
-                    # Crypto fallback: Use existing models even if they don't meet strict quality gates
+                try:
+                    self.active_symbols.add(symbol)
+                    print(f"  ✅ Symbol {symbol} has been activated! Active symbols count: {len(self.active_symbols)}")
+                    if is_symbol_active:
+                        print(f"  ✅ Symbol {symbol} has been activated (with models).")
+                    else:
+                        # Crypto fallback: Use existing models even if they don't meet strict quality gates
+                        if is_crypto_symbol(symbol):
+                            if model_trending:
+                                self.trending_models[symbol] = model_trending
+                                print(f"  🔄 Crypto {symbol}: Using TRENDING model (fallback mode)")
+                            if model_ranging:
+                                self.ranging_models[symbol] = model_ranging
+                                print(f"  🔄 Crypto {symbol}: Using RANGING model (fallback mode)")
+                            crypto_fallback_activated = True
+                            print(f"  🔄 Symbol {symbol} activated as crypto (fallback mode - will train models later).")
+                except Exception as e:
+                    print(f"  ❌ Error activating {symbol}: {e}")
+                    # Force add crypto symbols even if there's an error
                     if is_crypto_symbol(symbol):
-                        if model_trending:
-                            self.trending_models[symbol] = model_trending
-                            print(f"  🔄 Crypto {symbol}: Using TRENDING model (fallback mode)")
-                        if model_ranging:
-                            self.ranging_models[symbol] = model_ranging
-                            print(f"  🔄 Crypto {symbol}: Using RANGING model (fallback mode)")
-                        crypto_fallback_activated = True
-                        print(f"  🔄 Symbol {symbol} activated as crypto (fallback mode - will train models later).")
+                        self.active_symbols.add(symbol)
+                        print(f"  🚨 Force-activated crypto symbol {symbol} despite error")
             else:
                 # Only remove models for non-crypto symbols or crypto without fallback
                 if not (is_crypto_symbol(symbol) and crypto_fallback_activated):
@@ -19056,6 +19082,36 @@ class EnhancedTradingBot:
 
 
 
+        # --- CRYPTO BACKUP ACTIVATION ---
+        print(f"\n🔧 [CRYPTO BACKUP] Ensuring crypto symbols are activated...")
+        crypto_symbols_to_check = ['BTCUSD', 'ETHUSD']
+        for crypto_symbol in crypto_symbols_to_check:
+            if crypto_symbol not in self.active_symbols and is_crypto_symbol(crypto_symbol):
+                print(f"   🚨 [CRYPTO BACKUP] {crypto_symbol} missing from active symbols - force adding")
+                self.active_symbols.add(crypto_symbol)
+                
+                # Try to load models if not already loaded
+                if crypto_symbol not in self.trending_models:
+                    model_trending = load_latest_model(crypto_symbol, "ensemble_trending")
+                    if model_trending:
+                        self.trending_models[crypto_symbol] = model_trending
+                        print(f"   🔧 [CRYPTO BACKUP] Loaded TRENDING model for {crypto_symbol}")
+                
+                if crypto_symbol not in self.ranging_models:
+                    model_ranging = load_latest_model(crypto_symbol, "ensemble_ranging")
+                    if model_ranging:
+                        self.ranging_models[crypto_symbol] = model_ranging
+                        print(f"   🔧 [CRYPTO BACKUP] Loaded RANGING model for {crypto_symbol}")
+            else:
+                print(f"   ✅ [CRYPTO BACKUP] {crypto_symbol} already active")
+
+        # --- DEBUG: Final active symbols summary ---
+        print(f"\n🎯 [FINAL SUMMARY] Symbol Processing Complete:")
+        print(f"   - Total active symbols: {len(self.active_symbols)}")
+        print(f"   - Active symbols list: {list(self.active_symbols)}")
+        print(f"   - Trending models loaded: {list(self.trending_models.keys())}")
+        print(f"   - Ranging models loaded: {list(self.ranging_models.keys())}")
+        
         # --- Vng l p processing RL Agent ---
         if self.use_rl:
             rl_model_path = os.path.join(MODEL_DIR, "rl_portfolio_agent.zip")
