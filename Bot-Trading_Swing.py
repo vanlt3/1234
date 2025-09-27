@@ -1579,11 +1579,12 @@ try:
     from online_learning_bootstrap import OnlineLearningBootstrap
     from online_learning_integration import EnhancedOnlineLearningManager, create_enhanced_online_learning_manager
     from production_config import ONLINE_LEARNING_BOOTSTRAP_CONFIG
-
-# Override production config for enhanced logging
-import production_config
-production_config.DEPLOYMENT_CONFIG['DEBUG_MODE'] = True
-production_config.DEPLOYMENT_CONFIG['VERBOSE_LOGGING'] = True
+    
+    # Override production config for enhanced logging
+    import production_config
+    production_config.DEPLOYMENT_CONFIG['DEBUG_MODE'] = True
+    production_config.DEPLOYMENT_CONFIG['VERBOSE_LOGGING'] = True
+    
     BOOTSTRAP_AVAILABLE = True
     print("✅ [Bootstrap] Online Learning Bootstrap modules loaded successfully")
 except ImportError as e:
