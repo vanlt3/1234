@@ -43,6 +43,15 @@ os.environ['GYMNASIUM_DISABLE_ENVIRONMENT_CHECKER'] = '1'  # For Gymnasium compa
 
 print("🔧 [GPU] CUDA/GPU warnings suppressed")
 
+# ==================================================
+# PATH CONFIGURATION FOR MODULE IMPORTS
+# ==================================================
+# Add workspace path to Python path for module resolution
+workspace_path = '/workspace'
+if workspace_path not in sys.path:
+    sys.path.insert(0, workspace_path)
+    print(f"🔧 [Path] Added {workspace_path} to Python path")
+
 import asyncio
 import copy
 import json
