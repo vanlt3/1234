@@ -16805,7 +16805,7 @@ class AdvancedEnsembleManager:
             
             # Weighted ensemble prediction
             final_prediction = self._combine_predictions(
-                bagging_prediction, boosting_prediction, stacking_prediction
+                bagging_prediction, boosting_prediction, stacking_prediction, symbol
             )
             
             return final_prediction
@@ -16928,7 +16928,7 @@ class AdvancedEnsembleManager:
             logging.error(f"Error in stacking prediction: {e}")
             return "HOLD", 0.5
     
-    def _combine_predictions(self, bagging_pred, boosting_pred, stacking_pred):
+    def _combine_predictions(self, bagging_pred, boosting_pred, stacking_pred, symbol):
         """Combine predictions from all ensemble methods"""
         try:
             # Extract predictionfixndonfidences
