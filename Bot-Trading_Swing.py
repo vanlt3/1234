@@ -1,4 +1,4 @@
-# Standard library imports
+﻿# Standard library imports
 print("🚀 [Bot] Starting imports...")
 
 # ==================================================
@@ -18,369 +18,15 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 print("🔧 [Encoding] UTF-8 encoding configured successfully")
 
-# ==================================================
-# SUPPRESS CUDA/GPU WARNINGS AND TENSORFLOW LOGS
-# ==================================================
-# Suppress TensorFlow warnings and CUDA registration messages
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TensorFlow INFO and WARNING messages
-os.environ['CUDA_VISIBLE_DEVICES'] = ''   # Disable CUDA if not needed for faster startup
-
-# Suppress specific CUDA warnings
-import warnings
-warnings.filterwarnings('ignore', category=UserWarning, module='.*cuda.*')
-warnings.filterwarnings('ignore', category=FutureWarning, module='.*tensorflow.*')
-warnings.filterwarnings('ignore', category=DeprecationWarning, module='.*gym.*')
-warnings.filterwarnings('ignore', category=UserWarning, module='.*gymnasium.*')
-warnings.filterwarnings('ignore', category=UserWarning, module='.*stable_baselines3.*')
-warnings.filterwarnings('ignore', category=FutureWarning, module='.*numpy.*')
-
-# Suppress JAX warnings
-os.environ['JAX_PLATFORMS'] = 'cpu'  # Force JAX to use CPU only
-
-# Suppress Gym deprecation warnings and upgrade to Gymnasium
-os.environ['GYM_IGNORE_DEPRECATION_WARNINGS'] = '1'
-os.environ['GYMNASIUM_DISABLE_ENVIRONMENT_CHECKER'] = '1'  # For Gymnasium compatibility
-
-print("🔧 [GPU] CUDA/GPU warnings suppressed")
-
-# ==================================================
-# PATH CONFIGURATION FOR MODULE IMPORTS
-# ==================================================
-# Add workspace path to Python path for module resolution
-workspace_path = '/workspace'
-if workspace_path not in sys.path:
-    sys.path.insert(0, workspace_path)
-    print(f"🔧 [Path] Added {workspace_path} to Python path")
-
 import asyncio
 import copy
 import json
 import logging
-
-# ==============================================================================
-# ENHANCED LOGGING CONFIGURATION - INTEGRATED
-# ==============================================================================
-from datetime import datetime
-from pathlib import Path
-
-# Enhanced Logging Configuration
-ENHANCED_LOGGING_CONFIG = {
-    # Global logging settings
-    'ENABLE_DEBUG_MODE': True,          # Enable debug mode for detailed logs
-    'ENABLE_VERBOSE_LOGGING': True,     # Enable verbose logging
-    'CONSOLE_LOG_LEVEL': 'DEBUG',       # Show all logs in console
-    'FILE_LOG_LEVEL': 'DEBUG',          # Save all logs to file
-    
-    # Trading pipeline specific logging
-    'ENABLE_PREDICTION_LOGS': True,     # Log ML model predictions
-    'ENABLE_SIGNAL_LOGS': True,         # Log trading signals generation
-    'ENABLE_CONFIDENCE_LOGS': True,     # Log confidence calculations
-    'ENABLE_DECISION_LOGS': True,       # Log Master Agent decisions
-    'ENABLE_ENTRY_LOGS': True,          # Log trade entry decisions
-    'ENABLE_FEATURE_LOGS': True,        # Log feature engineering details
-    'ENABLE_RL_LOGS': True,             # Log RL Agent actions
-    'ENABLE_PORTFOLIO_LOGS': True,      # Log portfolio management
-    
-    # Performance logging
-    'ENABLE_TIMING_LOGS': True,         # Log execution times
-    'ENABLE_API_LOGS': True,            # Log API calls and responses
-    'ENABLE_ERROR_DETAIL_LOGS': True,   # Detailed error logging
-    
-    # Log formatting
-    'USE_COLORED_CONSOLE': True,        # Use colors in console
-    'USE_EMOJIS': True,                 # Use emojis for better visibility
-    'LOG_TIMESTAMP_FORMAT': '%Y-%m-%d %H:%M:%S.%f',  # Detailed timestamps
-    
-    # File logging
-    'ROTATE_LOG_FILES': True,           # Rotate log files
-    'MAX_LOG_FILE_SIZE': '50MB',        # Max size before rotation
-    'KEEP_LOG_FILES': 7,                # Keep 7 days of logs
-}
-
-# Specific Logger Configurations
-LOGGER_CONFIGS = {
-    # Core trading loggers
-    'TradingBot': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '🤖 [Bot]',
-    },
-    
-    # ML/AI Prediction loggers
-    'MLPredictor': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '🧠 [ML]',
-    },
-    
-    'RLAgent': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '🎯 [RL]',
-    },
-    
-    'EnsembleModel': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '🎪 [Ensemble]',
-    },
-    
-    # Signal and Decision loggers
-    'SignalGenerator': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '📡 [Signal]',
-    },
-    
-    'ConfidenceManager': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '🎚️ [Confidence]',
-    },
-    
-    'MasterAgent': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '👑 [Master]',
-    },
-    
-    'TradeDecision': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '⚖️ [Decision]',
-    },
-    
-    # Feature and Data loggers
-    'FeatureEngineer': {
-        'level': 'INFO',  # Less verbose for features
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '⚙️ [Features]',
-    },
-    
-    'DataManager': {
-        'level': 'INFO',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '📊 [Data]',
-    },
-    
-    # Portfolio and Risk loggers
-    'PortfolioManager': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '💼 [Portfolio]',
-    },
-    
-    'RiskManager': {
-        'level': 'DEBUG',
-        'enable_console': True,
-        'enable_file': True,
-        'prefix': '🛡️ [Risk]',
-    },
-}
-
-# Enhanced Formatter Class
-class TradingBotFormatter(logging.Formatter):
-    """Enhanced formatter specifically for trading bot logs"""
-    
-    COLORS = {
-        'DEBUG': '\033[36m',     # Cyan
-        'INFO': '\033[32m',      # Green
-        'WARNING': '\033[33m',   # Yellow
-        'ERROR': '\033[31m',     # Red
-        'CRITICAL': '\033[35m',  # Magenta
-        'RESET': '\033[0m'       # Reset
-    }
-    
-    LEVEL_EMOJIS = {
-        'DEBUG': '🔍',
-        'INFO': 'ℹ️',
-        'WARNING': '⚠️',
-        'ERROR': '❌',
-        'CRITICAL': '🚨'
-    }
-    
-    # Special emojis for trading-specific logs
-    TRADING_EMOJIS = {
-        'prediction': '🔮',
-        'signal': '📡',
-        'confidence': '🎚️',
-        'entry': '🚪',
-        'exit': '🚀',
-        'profit': '💰',
-        'loss': '📉',
-        'buy': '🟢',
-        'sell': '🔴',
-        'hold': '⏸️',
-        'success': '✅',
-        'failure': '❌',
-        'warning': '⚠️',
-    }
-    
-    def format(self, record):
-        # Add timestamp
-        record.asctime = datetime.fromtimestamp(record.created).strftime(
-            ENHANCED_LOGGING_CONFIG['LOG_TIMESTAMP_FORMAT'][:-3]  # Remove microseconds for readability
-        )
-        
-        # Add level emoji and color
-        if ENHANCED_LOGGING_CONFIG['USE_EMOJIS']:
-            level_emoji = self.LEVEL_EMOJIS.get(record.levelname, '📝')
-        else:
-            level_emoji = ''
-            
-        if ENHANCED_LOGGING_CONFIG['USE_COLORED_CONSOLE']:
-            color = self.COLORS.get(record.levelname, '')
-            reset = self.COLORS['RESET']
-            record.levelname = f"{color}{level_emoji} {record.levelname}{reset}"
-        else:
-            record.levelname = f"{level_emoji} {record.levelname}"
-        
-        # Add trading-specific emojis to message
-        if ENHANCED_LOGGING_CONFIG['USE_EMOJIS']:
-            message = str(record.msg).lower()
-            for keyword, emoji in self.TRADING_EMOJIS.items():
-                if keyword in message:
-                    record.msg = f"{emoji} {record.msg}"
-                    break
-        
-        return super().format(record)
-
-# Setup Functions
-def setup_enhanced_logging():
-    """Setup enhanced logging configuration for trading bot"""
-    
-    # Create logs directory
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    
-    # Clear existing handlers
-    root_logger = logging.getLogger()
-    root_logger.handlers.clear()
-    
-    # Set root logger level
-    root_logger.setLevel(logging.DEBUG)
-    
-    # Setup console handler
-    if ENHANCED_LOGGING_CONFIG['ENABLE_DEBUG_MODE']:
-        console_handler = logging.StreamHandler()
-        console_formatter = TradingBotFormatter(
-            '%(asctime)s | %(levelname)-15s | %(name)-20s | %(message)s'
-        )
-        console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(getattr(logging, ENHANCED_LOGGING_CONFIG['CONSOLE_LOG_LEVEL']))
-        root_logger.addHandler(console_handler)
-    
-    # Setup file handler
-    log_filename = f"trading_bot_detailed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-    file_handler = logging.FileHandler(log_dir / log_filename, encoding='utf-8')
-    file_formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(name)-20s | %(funcName)-20s:%(lineno)-4d | %(message)s'
-    )
-    file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(getattr(logging, ENHANCED_LOGGING_CONFIG['FILE_LOG_LEVEL']))
-    root_logger.addHandler(file_handler)
-    
-    # Setup specific loggers
-    configured_loggers = {}
-    for logger_name, config in LOGGER_CONFIGS.items():
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(getattr(logging, config['level']))
-        logger.propagate = True
-        configured_loggers[logger_name] = logger
-    
-    # Suppress noisy external libraries
-    external_libs = ['urllib3', 'requests', 'tensorflow', 'torch', 'sklearn', 'matplotlib', 'numpy', 'pandas']
-    for lib in external_libs:
-        logging.getLogger(lib).setLevel(logging.WARNING)
-    
-    print("🚀 [Enhanced Logging] Detailed trading bot logging configured!")
-    print(f"📁 [Enhanced Logging] Logs will be saved to: {log_dir / log_filename}")
-    
-    return configured_loggers
-
-def get_trading_logger(name: str) -> logging.Logger:
-    """Get a configured logger for trading components"""
-    config = LOGGER_CONFIGS.get(name, {
-        'level': 'INFO',
-        'prefix': f'🔧 [{name}]'
-    })
-    
-    logger = logging.getLogger(name)
-    logger.setLevel(getattr(logging, config['level']))
-    
-    return logger
-
-# Logging Helper Functions
-def log_prediction(logger: logging.Logger, symbol: str, prediction: dict):
-    """Log ML model prediction with enhanced formatting"""
-    if ENHANCED_LOGGING_CONFIG['ENABLE_PREDICTION_LOGS']:
-        direction = prediction.get('direction', 'UNKNOWN')
-        confidence = prediction.get('confidence', 0.0)
-        model_name = prediction.get('model', 'Unknown')
-        
-        logger.debug(f"🔮 [Prediction] {symbol} | Model: {model_name} | Direction: {direction} | Confidence: {confidence:.3f}")
-
-def log_signal(logger: logging.Logger, symbol: str, signal: dict):
-    """Log trading signal generation with enhanced formatting"""
-    if ENHANCED_LOGGING_CONFIG['ENABLE_SIGNAL_LOGS']:
-        signal_type = signal.get('type', 'UNKNOWN')
-        strength = signal.get('strength', 0.0)
-        source = signal.get('source', 'Unknown')
-        
-        emoji = '🟢' if signal_type == 'BUY' else '🔴' if signal_type == 'SELL' else '⏸️'
-        logger.debug(f"{emoji} [Signal] {symbol} | Type: {signal_type} | Strength: {strength:.3f} | Source: {source}")
-
-def log_confidence(logger: logging.Logger, symbol: str, confidence_data: dict):
-    """Log confidence calculation with enhanced formatting"""
-    if ENHANCED_LOGGING_CONFIG['ENABLE_CONFIDENCE_LOGS']:
-        final_confidence = confidence_data.get('final', 0.0)
-        method = confidence_data.get('method', 'Unknown')
-        components = confidence_data.get('components', {})
-        
-        logger.debug(f"🎚️ [Confidence] {symbol} | Final: {final_confidence:.3f} | Method: {method} | Components: {components}")
-
-def log_trade_decision(logger: logging.Logger, symbol: str, decision: dict):
-    """Log Master Agent trade decision with enhanced formatting"""
-    if ENHANCED_LOGGING_CONFIG['ENABLE_DECISION_LOGS']:
-        action = decision.get('action', 'UNKNOWN')
-        reasoning = decision.get('reasoning', 'No reason provided')
-        risk_score = decision.get('risk_score', 0.0)
-        
-        emoji = '✅' if action in ['BUY', 'SELL'] else '❌' if action == 'REJECT' else '⏸️'
-        logger.debug(f"{emoji} [Decision] {symbol} | Action: {action} | Risk: {risk_score:.3f} | Reason: {reasoning}")
-
-def log_entry_execution(logger: logging.Logger, symbol: str, entry_data: dict):
-    """Log trade entry execution with enhanced formatting"""
-    if ENHANCED_LOGGING_CONFIG['ENABLE_ENTRY_LOGS']:
-        entry_price = entry_data.get('price', 0.0)
-        quantity = entry_data.get('quantity', 0.0)
-        sl_price = entry_data.get('sl', 0.0)
-        tp_price = entry_data.get('tp', 0.0)
-        
-        logger.info(f"🚪 [Entry] {symbol} | Price: {entry_price:.5f} | Qty: {quantity} | SL: {sl_price:.5f} | TP: {tp_price:.5f}")
-
-# ==============================================================================
-# END ENHANCED LOGGING CONFIGURATION
-# ==============================================================================
-
 import re
 import sqlite3
 import time
 import threading
 import warnings
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import multiprocessing as mp
 print("✅ [Bot] Basic imports completed")
 import glob
 import shutil
@@ -401,16 +47,6 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 ENABLE_HISTORICAL_SL_CHECK = False  # Set to False to disable historical SL checking
 SEND_HISTORICAL_SL_ALERTS = False   # Set to True to send Discord alerts for historical SL (only if ENABLE_HISTORICAL_SL_CHECK is True)
 
-# ===== REAL-TIME MONITORING CONFIGURATION =====
-ENABLE_REALTIME_MONITORING = True   # Enable real-time price monitoring for SL/TP
-REALTIME_CHECK_INTERVAL = 30        # Seconds between real-time price checks
-BOT_CYCLE_MODE = "HOURLY"            # Options: "HOURLY", "CONTINUOUS", "CUSTOM"
-BOT_CYCLE_INTERVAL = 3600            # Seconds between cycles (only used if BOT_CYCLE_MODE = "CUSTOM")
-ENABLE_WICK_DETECTION = True        # Check candle wicks/shadows for SL/TP hits
-WICK_DETECTION_CANDLES = 3          # Number of recent candles to check for wicks
-MAX_REALTIME_RETRIES = 3            # Max retries for real-time price fetching
-REALTIME_TIMEOUT = 10               # Timeout in seconds for real-time API calls
-
 class SymbolType(Enum):
     """Enum for symbol types"""
     CRYPTO = "crypto"
@@ -418,323 +54,6 @@ class SymbolType(Enum):
     EQUITY = "equity"
     COMMODITY = "commodity"
     UNKNOWN = "unknown"
-
-class RealTimeMonitor:
-    """
-    Real-time price monitoring system for SL/TP detection
-    Phát hiện chính xác SL/TP hits bao gồm cả wicks/shadows
-    """
-    
-    def __init__(self, data_manager, logger):
-        self.data_manager = data_manager
-        self.logger = logger
-        self.monitoring_active = False
-        self.monitor_task = None
-        self.positions_to_monitor = {}
-        self.last_check_time = {}
-        
-    def start_monitoring(self, positions):
-        """Bắt đầu theo dõi real-time cho các vị thế"""
-        if not ENABLE_REALTIME_MONITORING:
-            return
-            
-        self.positions_to_monitor = positions.copy()
-        if not self.monitoring_active and self.positions_to_monitor:
-            self.monitoring_active = True
-            self.monitor_task = asyncio.create_task(self._monitoring_loop())
-            self.logger.info(f"🔄 [Real-time Monitor] Started monitoring {len(positions)} positions")
-    
-    def stop_monitoring(self):
-        """Dừng theo dõi real-time"""
-        self.monitoring_active = False
-        if self.monitor_task:
-            self.monitor_task.cancel()
-        self.logger.info("⏹️ [Real-time Monitor] Stopped monitoring")
-    
-    def update_positions(self, positions):
-        """Cập nhật danh sách vị thế cần theo dõi"""
-        self.positions_to_monitor = positions.copy()
-        if not positions and self.monitoring_active:
-            self.stop_monitoring()
-    
-    async def _monitoring_loop(self):
-        """Vòng lặp chính cho việc theo dõi real-time"""
-        while self.monitoring_active:
-            try:
-                if not self.positions_to_monitor:
-                    await asyncio.sleep(REALTIME_CHECK_INTERVAL)
-                    continue
-                
-                # Kiểm tra từng vị thế
-                positions_to_close = []
-                for symbol, position in self.positions_to_monitor.items():
-                    try:
-                        # Validate position structure
-                        required_fields = ['signal', 'sl', 'tp']
-                        if not all(field in position for field in required_fields):
-                            self.logger.warning(f"⚠️ [Real-time Monitor] Invalid position structure for {symbol}: missing fields")
-                            continue
-                            
-                        hit_result = await self._check_sl_tp_hit(symbol, position)
-                        if hit_result:
-                            positions_to_close.append((symbol, hit_result))
-                            self.logger.info(f"🎯 [Real-time Monitor] {symbol} {hit_result['type']} hit detected at {hit_result['price']}")
-                    except Exception as e:
-                        self.logger.error(f"❌ [Real-time Monitor] Error checking position {symbol}: {e}")
-                        continue
-                
-                # Xử lý các vị thế cần đóng
-                for symbol, hit_result in positions_to_close:
-                    await self._handle_position_hit(symbol, hit_result)
-                
-                await asyncio.sleep(REALTIME_CHECK_INTERVAL)
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self.logger.error(f"❌ [Real-time Monitor] Error in monitoring loop: {e}")
-                await asyncio.sleep(5)  # Short delay before retry
-    
-    async def _check_sl_tp_hit(self, symbol, position):
-        """
-        Kiểm tra xem SL hoặc TP có bị hit không
-        Bao gồm cả kiểm tra wicks/shadows
-        """
-        try:
-            # 1. Lấy giá hiện tại
-            current_price = await self._get_realtime_price(symbol)
-            if current_price is None:
-                return None
-            
-            # 2. Kiểm tra SL/TP với giá hiện tại
-            hit_type = self._check_current_price_hit(position, current_price)
-            if hit_type:
-                return {
-                    'type': hit_type,
-                    'price': current_price,
-                    'method': 'current_price',
-                    'timestamp': datetime.now(pytz.timezone("Asia/Bangkok"))
-                }
-            
-            # 3. Kiểm tra wicks/shadows nếu được bật
-            if ENABLE_WICK_DETECTION:
-                wick_hit = await self._check_wick_hit(symbol, position)
-                if wick_hit:
-                    return wick_hit
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"❌ [Real-time Monitor] Error checking {symbol}: {e}")
-            return None
-    
-    def _check_current_price_hit(self, position, current_price):
-        """Kiểm tra SL/TP với giá hiện tại"""
-        signal = position['signal']
-        sl_price = float(position['sl'])
-        tp_price = float(position['tp'])
-        current_price = float(current_price)
-        
-        # Log detailed price comparison for debugging
-        symbol = position.get('symbol', 'Unknown')
-        self.logger.debug(f"[Real-time Monitor] {symbol} Price Check: Current={current_price:.5f}, SL={sl_price:.5f}, TP={tp_price:.5f}, Signal={signal}")
-        
-        if signal == "BUY":
-            if current_price <= sl_price:
-                self.logger.info(f"🔴 [Real-time Monitor] {symbol} BUY SL hit: {current_price:.5f} <= {sl_price:.5f}")
-                return "SL"
-            elif current_price >= tp_price:
-                self.logger.info(f"🟢 [Real-time Monitor] {symbol} BUY TP hit: {current_price:.5f} >= {tp_price:.5f}")
-                return "TP"
-        else:  # SELL
-            if current_price >= sl_price:
-                self.logger.info(f"🔴 [Real-time Monitor] {symbol} SELL SL hit: {current_price:.5f} >= {sl_price:.5f}")
-                return "SL"
-            elif current_price <= tp_price:
-                self.logger.info(f"🟢 [Real-time Monitor] {symbol} SELL TP hit: {current_price:.5f} <= {tp_price:.5f}")
-                return "TP"
-        
-        return None
-    
-    async def _check_wick_hit(self, symbol, position):
-        """
-        Kiểm tra xem có nến nào có wick chạm SL/TP không
-        Đây là tính năng quan trọng để phát hiện các trường hợp như XAUUSD
-        """
-        try:
-            # Lấy dữ liệu nến gần nhất
-            primary_tf = PRIMARY_TIMEFRAME_BY_SYMBOL.get(symbol, PRIMARY_TIMEFRAME_DEFAULT)
-            multi_tf_data = self.data_manager.fetch_multi_timeframe_data(
-                symbol, 
-                count=WICK_DETECTION_CANDLES + 2
-            )
-            
-            if not multi_tf_data or primary_tf not in multi_tf_data:
-                return None
-            
-            df = multi_tf_data[primary_tf]
-            if df is None or len(df) < WICK_DETECTION_CANDLES:
-                return None
-            
-            # Kiểm tra các nến gần nhất
-            recent_candles = df.tail(WICK_DETECTION_CANDLES)
-            signal = position['signal']
-            sl_price = position['sl']
-            tp_price = position['tp']
-            
-            for idx, candle in recent_candles.iterrows():
-                candle_time = candle.name if hasattr(candle, 'name') else idx
-                high_price = candle['high']
-                low_price = candle['low']
-                
-                # Kiểm tra SL hit
-                if signal == "BUY" and low_price <= sl_price:
-                    return {
-                        'type': 'SL',
-                        'price': sl_price,
-                        'method': 'wick_detection',
-                        'candle_time': candle_time,
-                        'candle_low': low_price,
-                        'timestamp': datetime.now(pytz.timezone("Asia/Bangkok"))
-                    }
-                elif signal == "SELL" and high_price >= sl_price:
-                    return {
-                        'type': 'SL', 
-                        'price': sl_price,
-                        'method': 'wick_detection',
-                        'candle_time': candle_time,
-                        'candle_high': high_price,
-                        'timestamp': datetime.now(pytz.timezone("Asia/Bangkok"))
-                    }
-                
-                # Kiểm tra TP hit
-                if signal == "BUY" and high_price >= tp_price:
-                    return {
-                        'type': 'TP',
-                        'price': tp_price,
-                        'method': 'wick_detection',
-                        'candle_time': candle_time,
-                        'candle_high': high_price,
-                        'timestamp': datetime.now(pytz.timezone("Asia/Bangkok"))
-                    }
-                elif signal == "SELL" and low_price <= tp_price:
-                    return {
-                        'type': 'TP',
-                        'price': tp_price,
-                        'method': 'wick_detection',
-                        'candle_time': candle_time,
-                        'candle_low': low_price,
-                        'timestamp': datetime.now(pytz.timezone("Asia/Bangkok"))
-                    }
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"❌ [Real-time Monitor] Wick detection error for {symbol}: {e}")
-            return None
-    
-    async def _get_realtime_price(self, symbol):
-        """Lấy giá real-time với retry logic"""
-        for attempt in range(MAX_REALTIME_RETRIES):
-            try:
-                # Thử lấy từ data manager
-                price = self.data_manager.get_current_price(symbol)
-                if price is not None and price > 0:
-                    self.logger.debug(f"[Real-time Monitor] {symbol} price from data_manager: {price:.5f}")
-                    return price
-                
-                # Fallback: lấy từ API trực tiếp
-                price = await self._fetch_price_from_api(symbol)
-                if price is not None and price > 0:
-                    self.logger.debug(f"[Real-time Monitor] {symbol} price from API: {price:.5f}")
-                    return price
-                    
-            except Exception as e:
-                self.logger.warning(f"⚠️ [Real-time Monitor] Price fetch attempt {attempt+1} failed for {symbol}: {e}")
-                if attempt < MAX_REALTIME_RETRIES - 1:
-                    await asyncio.sleep(1)
-        
-        self.logger.error(f"❌ [Real-time Monitor] Failed to get price for {symbol} after {MAX_REALTIME_RETRIES} attempts")
-        return None
-    
-    async def _fetch_price_from_api(self, symbol):
-        """Lấy giá trực tiếp từ API"""
-        try:
-            # Sử dụng timeout cho API call
-            async with asyncio.timeout(REALTIME_TIMEOUT):
-                # Thử các API khác nhau
-                price = self.data_manager.get_finnhub_real_time(symbol)
-                if price and 'c' in price:
-                    return float(price['c'])
-                
-                price = self.data_manager.get_eodhd_real_time(symbol)
-                if price and 'close' in price:
-                    return float(price['close'])
-                    
-        except asyncio.TimeoutError:
-            self.logger.warning(f"⚠️ [Real-time Monitor] API timeout for {symbol}")
-        except Exception as e:
-            self.logger.warning(f"⚠️ [Real-time Monitor] API error for {symbol}: {e}")
-        
-        return None
-    
-    async def _handle_position_hit(self, symbol, hit_result):
-        """Xử lý khi phát hiện SL/TP bị hit"""
-        try:
-            hit_type = hit_result['type']
-            hit_price = hit_result['price']
-            method = hit_result['method']
-            
-            # Log thông tin chi tiết
-            if method == 'wick_detection':
-                candle_info = f"candle at {hit_result.get('candle_time', 'unknown')}"
-                if hit_type == 'SL':
-                    extreme_price = hit_result.get('candle_low') or hit_result.get('candle_high')
-                else:
-                    extreme_price = hit_result.get('candle_high') or hit_result.get('candle_low')
-                
-                self.logger.info(
-                    f"🎯 [Real-time Monitor] {symbol} {hit_type} HIT by WICK! "
-                    f"Price: {hit_price:.5f}, Extreme: {extreme_price:.5f}, {candle_info}"
-                )
-                print(f"🎯 [Real-time Monitor] {symbol}: {hit_type} hit by wick at {hit_price:.5f}")
-            else:
-                self.logger.info(
-                    f"🎯 [Real-time Monitor] {symbol} {hit_type} HIT! "
-                    f"Current price: {hit_price:.5f}"
-                )
-                print(f"🎯 [Real-time Monitor] {symbol}: {hit_type} hit at {hit_price:.5f}")
-            
-            # Gọi callback để đóng vị thế (sẽ được implement trong bot chính)
-            if hasattr(self, 'position_hit_callback') and self.position_hit_callback:
-                await self.position_hit_callback(symbol, hit_result)
-            
-            # Xóa vị thế khỏi danh sách theo dõi
-            if symbol in self.positions_to_monitor:
-                del self.positions_to_monitor[symbol]
-                
-        except Exception as e:
-            self.logger.error(f"❌ [Real-time Monitor] Error handling position hit for {symbol}: {e}")
-    
-    def set_position_hit_callback(self, callback):
-        """Đặt callback function để xử lý khi vị thế bị hit"""
-        self.position_hit_callback = callback
-    
-    def get_monitoring_status(self):
-        """Lấy trạng thái monitoring hiện tại"""
-        return {
-            'monitoring_active': self.monitoring_active,
-            'positions_count': len(self.positions_to_monitor),
-            'monitored_symbols': list(self.positions_to_monitor.keys()),
-            'config': {
-                'enabled': ENABLE_REALTIME_MONITORING,
-                'check_interval': REALTIME_CHECK_INTERVAL,
-                'wick_detection': ENABLE_WICK_DETECTION,
-                'wick_candles': WICK_DETECTION_CANDLES,
-                'max_retries': MAX_REALTIME_RETRIES,
-                'timeout': REALTIME_TIMEOUT
-            }
-        }
 
 class TimeFrame(Enum):
     """Enum for timeframes"""
@@ -770,45 +89,24 @@ class SymbolConfig:
 # Refactored API configuration
 API_CONFIGS: Dict[str, APIConfig] = {
     'FINHUB': APIConfig(
-        api_key='d1b3ichr01qjhvtsbj8g',  # Real Finnhub API key
-        base_url='https://finnhub.io/api/v1',  # Fixed URL
+        api_key='d1b3ichr01qjhvtsbj8g',
+        base_url='https://finhub.io/api/v1',
         rate_limit=60
     ),
     'MARKETAUX': APIConfig(
-        api_key='CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql',  # Real Marketaux API key
+        api_key='CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql',
         base_url='https://api.marketaux.com/v1',
         rate_limit=100
     ),
     'NEWSAPI': APIConfig(
-        api_key='abd8f43b808f42fdb8d28fb1c429af72',  # Real NewsAPI key
+        api_key='abd8f43b808f42fdb8d28fb1c429af72',
         base_url='https://newsapi.org/v2',
         rate_limit=1000
     ),
     'EODHD': APIConfig(
-        api_key='68bafd7d44a7f0.25202650',  # Real EODHD API key
+        api_key='68bafd7d44a7f0.25202650',
         base_url='https://eodhistoricaldata.com/api',
         rate_limit=20
-    ),
-    # Free Economic Calendar APIs
-    'ALPHA_VANTAGE': APIConfig(
-        api_key='free',  # Free tier available
-        base_url='https://www.alphavantage.co/query',
-        rate_limit=5
-    ),
-    'YAHOO_FINANCE': APIConfig(
-        api_key='free',  # No API key required
-        base_url='https://query1.finance.yahoo.com/v1/finance',
-        rate_limit=2000
-    ),
-    'FRED': APIConfig(
-        api_key='free',  # Free API available
-        base_url='https://api.stlouisfed.org/fred',
-        rate_limit=120
-    ),
-    'ECONOMIC_CALENDAR_API': APIConfig(
-        api_key='free',  # Free economic calendar
-        base_url='https://api.forexfactory.com',
-        rate_limit=60
     )
 }
 
@@ -852,12 +150,7 @@ API_ENDPOINTS = {
     'FINHUB': {'base_url': API_CONFIGS['FINHUB'].base_url, 'quote': '/quote', 'news': '/company-news', 'sentiment': '/news-sentiment'},
     'MARKETAUX': {'base_url': API_CONFIGS['MARKETAUX'].base_url, 'news': '/news/all', 'news_intraday': '/news/intraday'},
     'NEWSAPI': {'base_url': API_CONFIGS['NEWSAPI'].base_url, 'everything': '/everything', 'top_headlines': '/top-headlines'},
-    'EODHD': {'base_url': API_CONFIGS['EODHD'].base_url, 'eod': '/eod', 'real_time': '/real-time', 'fundamentals': '/fundamentals'},
-    # Economic Calendar APIs
-    'ALPHA_VANTAGE': {'base_url': API_CONFIGS['ALPHA_VANTAGE'].base_url, 'economic_indicators': '', 'news': ''},
-    'YAHOO_FINANCE': {'base_url': API_CONFIGS['YAHOO_FINANCE'].base_url, 'calendar': '/calendar', 'news': '/news'},
-    'FRED': {'base_url': API_CONFIGS['FRED'].base_url, 'series': '/series', 'observations': '/series/observations'},
-    'ECONOMIC_CALENDAR_API': {'base_url': API_CONFIGS['ECONOMIC_CALENDAR_API'].base_url, 'calendar': '/calendar.json'}
+    'EODHD': {'base_url': API_CONFIGS['EODHD'].base_url, 'eod': '/eod', 'real_time': '/real-time', 'fundamentals': '/fundamentals'}
 }
 RATE_LIMITS = {name: config.rate_limit for name, config in API_CONFIGS.items()}
 
@@ -1053,7 +346,7 @@ def setup_detailed_logging() -> Dict[str, logging.Logger]:
             '%(asctime)s | %(levelname)-12s | %(name)-25s | %(message)s'
         )
         console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(logging.INFO)
         
         # File handler with detailed format
         file_handler = logging.FileHandler(
@@ -1892,23 +1185,6 @@ from scipy.special import expit
 
 # Machine Learning
 from sklearn.base import clone
-
-# Enhanced Online Learning Bootstrap Integration
-try:
-    from online_learning_bootstrap import OnlineLearningBootstrap
-    from online_learning_integration import EnhancedOnlineLearningManager, create_enhanced_online_learning_manager
-    from production_config import ONLINE_LEARNING_BOOTSTRAP_CONFIG
-    
-    # Override production config for enhanced logging
-    import production_config
-    production_config.DEPLOYMENT_CONFIG['DEBUG_MODE'] = True
-    production_config.DEPLOYMENT_CONFIG['VERBOSE_LOGGING'] = True
-    
-    BOOTSTRAP_AVAILABLE = True
-    print("✅ [Bootstrap] Online Learning Bootstrap modules loaded successfully")
-except ImportError as e:
-    print(f"⚠️ [Bootstrap] Bootstrap modules not available: {e}")
-    BOOTSTRAP_AVAILABLE = False
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.exceptions import NotFittedError
@@ -2290,11 +1566,7 @@ def safe_cross_val_score(estimator, X, y, cv=5, scoring='f1', n_jobs=None):
 #     tf.config.set_visible_devices([], 'GPU')
 
 GOOGLE_AI_API_KEY = "AIzaSyBCexoODvgrN2QRG8_iKv3p5VTJ5jaJ_B0"
-# Trading Economics API credentials - Updated for Production
-TRADING_ECONOMICS_API_KEY = "guest:guest"  # Free tier for demo, replace with valid key for production  
-TRADING_ECONOMICS_LAST_CALL = 0  # Track last API call time for rate limiting
-TRADING_ECONOMICS_CACHE = {}  # Cache for API responses
-TRADING_ECONOMICS_RATE_LIMIT = 0  # No wait between API calls
+TRADING_ECONOMICS_API_KEY = "a284ad0cdba547c:p5oyv77j6kovqhv"  # Trading Economics API credentials
 
 # Risk Management Configuration
 RISK_MANAGEMENT = {
@@ -2346,11 +1618,6 @@ MIN_SHARPE_RATIO = 1.2
 MAX_DRAWDOWN_THRESHOLD = 0.15
 MIN_CALMAR_RATIO = 0.8
 MIN_INFORMATION_RATIO = 0.5
-
-# Model quality gates thresholds - Using more lenient thresholds for better crypto activation
-MIN_F1_SCORE_GATE = 0.35  # Minimum F1 score for model acceptance (reduced for more symbols)
-MAX_STD_F1_GATE = 0.20    # Maximum standard deviation for F1 score (increased for flexibility)
-MIN_ACCURACY_GATE = 0.40  # Minimum accuracy for model acceptance (reduced for more symbols)
 
 # Enhanced risk management configuration by asset class
 RISK_CONFIG_BY_ASSET_CLASS = {
@@ -2623,22 +1890,14 @@ def is_market_open(symbol, current_time=None):
         bool: True if market is open, False otherwise
     """
     try:
-        # Debug logging for troubleshooting
-        is_crypto = is_crypto_symbol(symbol)
-        is_wknd = is_weekend()
-        
         # Crypto symbols trade 24/7
-        if is_crypto:
-            print(f"   [Market Debug] {symbol} is crypto -> Always open")
+        if is_crypto_symbol(symbol):
             return True
         
         # For other symbols, check if it's weekend
-        result = not is_wknd
-        print(f"   [Market Debug] {symbol} is not crypto, weekend={is_wknd} -> {'Open' if result else 'Closed'}")
-        return result
+        return not is_weekend()
     except Exception as e:
         logging.warning(f"Market open check error for {symbol}: {e}")
-        print(f"   [Market Debug] Error checking {symbol}, defaulting to appropriate fallback")
         # Fallback: assume market is open for crypto, closed for others on weekend
         if is_crypto_symbol(symbol):
             return True
@@ -2803,15 +2062,6 @@ except ImportError:
     TRADING_ECONOMICS_AVAILABLE = False
     te = None
 
-# Global flags to prevent spam logging of API errors
-API_ERROR_LOGGED = {
-    'trading_economics_403': False,
-    'trading_economics_401': False,
-    'news_api_404': False,
-    'marketaux_404': False,
-    'eodhd_401': False
-}
-
 # Check for other optional packages
 OPTIONAL_PACKAGES = {}
 
@@ -2853,8 +2103,6 @@ import joblib
 import os
 import json
 import logging
-# Enhanced Logging Configuration - Already integrated above
-
 def validate_dataframe_freshness(
     multi_tf_data,
     primary_tf: str,
@@ -3110,12 +2358,7 @@ ENTRY_TP_SL_CONFIG = {
         "volume_confirmation": False,
         "session_filter": False,
         "volatility_adjustment": True,
-        "fibonacci_levels": [0.236, 0.382, 0.5, 0.618, 0.786],
-        # Master Agent Trailing Stop Configuration
-        "min_trailing_profit": 0.012,  # 1.2% minimum profit to activate trailing
-        "trailing_atr_multiplier": 1.5,  # ATR multiplier for trailing distance
-        "trailing_volatility_threshold": 0.6,  # Volatility threshold for activation
-        "trailing_trend_strength_min": 0.7  # Minimum trend strength for trailing
+        "fibonacci_levels": [0.236, 0.382, 0.5, 0.618, 0.786]
     },
     "XAGUSD": {
         "entry_method": "fibonacci_confluence",
@@ -3127,12 +2370,7 @@ ENTRY_TP_SL_CONFIG = {
         "volume_confirmation": False,
         "session_filter": False,
         "volatility_adjustment": True,
-        "fibonacci_levels": [0.236, 0.382, 0.5, 0.618, 0.786],
-        # Master Agent Trailing Stop Configuration
-        "min_trailing_profit": 0.015,  # 1.5% minimum profit to activate trailing
-        "trailing_atr_multiplier": 1.8,  # ATR multiplier for trailing distance
-        "trailing_volatility_threshold": 0.5,  # Volatility threshold for activation
-        "trailing_trend_strength_min": 0.6  # Minimum trend strength for trailing
+        "fibonacci_levels": [0.236, 0.382, 0.5, 0.618, 0.786]
     },
     "USOIL": {
         "entry_method": "trend_following",
@@ -3143,12 +2381,7 @@ ENTRY_TP_SL_CONFIG = {
         "support_resistance_weight": 0.3,
         "volume_confirmation": True,
         "session_filter": False,
-        "volatility_adjustment": True,
-        # Master Agent Trailing Stop Configuration
-        "min_trailing_profit": 0.018,  # 1.8% minimum profit to activate trailing
-        "trailing_atr_multiplier": 2.0,  # ATR multiplier for trailing distance
-        "trailing_volatility_threshold": 0.7,  # Volatility threshold for activation
-        "trailing_trend_strength_min": 0.8  # Minimum trend strength for trailing
+        "volatility_adjustment": True
     },
 
     # === EQUITY INDICES (Session-based Trading) ===
@@ -3262,12 +2495,7 @@ ENTRY_TP_SL_CONFIG = {
         "support_resistance_weight": 0.25,
         "volume_confirmation": True,
         "session_filter": True,
-        "volatility_adjustment": True,
-        # Master Agent Trailing Stop Configuration
-        "min_trailing_profit": 0.008,  # 0.8% minimum profit to activate trailing
-        "trailing_atr_multiplier": 1.2,  # ATR multiplier for trailing distance
-        "trailing_volatility_threshold": 0.4,  # Volatility threshold for activation
-        "trailing_trend_strength_min": 0.6  # Minimum trend strength for trailing
+        "volatility_adjustment": True
     },
     "AUDUSD": {
         "entry_method": "asian_session_breakout",
@@ -3460,12 +2688,7 @@ ENTRY_TP_SL_CONFIG = {
         "support_resistance_weight": 0.25,
         "volume_confirmation": False,
         "session_filter": False,
-        "volatility_adjustment": True,
-        # Master Agent Trailing Stop Configuration
-        "min_trailing_profit": 0.016,  # 1.6% minimum profit to activate trailing
-        "trailing_atr_multiplier": 2.5,  # ATR multiplier for trailing distance
-        "trailing_volatility_threshold": 0.8,  # High volatility threshold for crypto
-        "trailing_trend_strength_min": 0.7  # Minimum trend strength for trailing
+        "volatility_adjustment": True
     },
     "ETHUSD": {
         "entry_method": "volatility_breakout",
@@ -3476,12 +2699,7 @@ ENTRY_TP_SL_CONFIG = {
         "support_resistance_weight": 0.25,
         "volume_confirmation": False,
         "session_filter": False,
-        "volatility_adjustment": True,
-        # Master Agent Trailing Stop Configuration
-        "min_trailing_profit": 0.018,  # 1.8% minimum profit to activate trailing
-        "trailing_atr_multiplier": 2.8,  # ATR multiplier for trailing distance
-        "trailing_volatility_threshold": 0.8,  # High volatility threshold for crypto
-        "trailing_trend_strength_min": 0.7  # Minimum trend strength for trailing
+        "volatility_adjustment": True
     }
 }
 
@@ -3898,9 +3116,9 @@ ASSET_CLASS_GROUPS = {
     "crypto": ["BTCUSD", "ETHUSD"],
 }
 # (Add near other configuration variables like OANDA_API_KEY)
-EODHD_API_KEY = "68bafd7d44a7f0.25202650"
+EODHD_API_KEY = " 68bafd7d44a7f025202650"
 NEWSAPI_ORG_API_KEY = "abd8f43b808f42fdb8d28fb1c429af72"
-FINNHUB_API_KEY = "d1b3ichr01qjhvtsbj8g"
+FINNHUB_API_KEY = "d1b3ichr01qjhvtsbj70d1b3ichr01qjhvtsbj7g"
 MARKETAUX_API_KEY = "CkuQmx9sPsjw0FRDeSkoO8U3O9Jj3HWnUYMJNEql"
 
 # Auto-Retrain Configuration
@@ -3915,12 +3133,11 @@ AUTO_RETRAIN_CONFIG = {
         "PERFORMANCE_DEGRADATION": True,  # Retrain when performance drops significantly
     },
     "RETRAIN_SETTINGS": {
-        "IMMEDIATE_RETRAIN": False,  # CHANGED: Delay retrain to prevent frequent triggers
+        "IMMEDIATE_RETRAIN": True,  # Retrain immediately when triggered
         "RETRAIN_ALL_SYMBOLS": False,  # Only retrain affected symbols
         "FORCE_FULL_RETRAIN": False,  # Force complete retraining (not incremental)
         "BACKUP_BEFORE_RETRAIN": True,  # Backup fromodels before retraining
         "NOTIFY_ON_RETRAIN": True,  # Send notification when retraining starts
-        "RETRAIN_COOLDOWN_HOURS": 6,  # NEW: Minimum hours between retrains for same symbol
     },
     "PERFORMANCE_THRESHOLDS": {
         "MIN_ACCURACY_THRESHOLD": 0.55,  # Minimum accuracy to trigger retrain
@@ -3940,7 +3157,11 @@ AUTO_RETRAIN_CONFIG = {
 # --- CODE M I ---
 #TIMEFRAMES = ["H4", "D1", "W1"]  # fallback if symbol doesn't have individual map
 PRIMARY_TIMEFRAME = "H4"
-# Quality gate thresholds defined above - removed duplicate definitions
+# Add these 2 lines to configuration
+# Add these thresholds to common configuration
+MIN_F1_SCORE_GATE = 0.35       # Minimum F1-Score threshold (reduced for more symbols)
+MAX_STD_F1_GATE = 0.20         # Maximum F1 standard deviation threshold (increased)
+MIN_ACCURACY_GATE = 0.40       # Minimum win rate threshold (reduced for more symbols)
 MIN_SAMPLES_GATE = 100         # Minimum sample count threshold for training
 MAX_RETRAIN_ATTEMPTS = 3
 ML_CONFIG = {
@@ -3949,7 +3170,7 @@ ML_CONFIG = {
     "MAX_STD_F1": 0.20,    # Tăng từ 0.1 để linh hoạt hơn
     "CV_N_SPLITS": 5,      # Gi m t10 dtang t c
     "CONFIDENCE_THRESHOLD": 0.6,  # Tang t0.5 dch t chhon
-    "MIN_CONFIDENCE_TRADE": 0.45,  # Reduced from 0.50 to increase trade opportunities
+    "MIN_CONFIDENCE_TRADE": 0.50,  # Gi m t0.55 dlinh ho t hon
     "MIN_SAMPLES_FOR_TRAINING": 100,  # Gi m t300 dlinh ho t hon
     "MAX_CORRELATION_THRESHOLD": 0.85,  # Gi m t0.9 dch t chhon
     "EARLY_STOPPING_PATIENCE": 3,  # Ultra-strict: ttest results
@@ -4042,8 +3263,8 @@ PERFORMANCE_THRESHOLDS = {
 
 # === OPTUNA (Enhanced Optimization) ===
 OPTUNA_CONFIG = {
-    "N_TRIALS": 50,         # Reduced from 200 to 50 for faster training
-    "TIMEOUT_SEC": 600,     # Reduced from 1800 to 600 seconds (10 minutes)
+    "N_TRIALS": 200,        # Increase trials to find better parameters
+    "TIMEOUT_SEC": 1800,    # Increase timeout to have enough time for optimization
     "PRUNING_ENABLED": True, # Enable pruning to remove poor trials
     "SAMPLER": "TPE",        # Tree-structured Parzen Estimator
     "EARLY_STOPPING_ROUNDS": 15,  # Increase early stopping rounds
@@ -5434,14 +4655,7 @@ class OnlineLearningManager:
             symbol = feedback_data['symbol']
             final_decision = feedback_data['final_decision']
             final_confidence = feedback_data['final_confidence']
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
-            decision_consistency = feedback_data.get('decision_consistency', 1.0)  # Default to 1.0 if missing
+            decision_consistency = feedback_data['decision_consistency']
             
             # T o training sample from feedback
             training_sample = self._create_training_sample_from_feedback(feedback_data)
@@ -5482,7 +4696,7 @@ class OnlineLearningManager:
                     'features': features,
                     'target': target,
                     'confidence': feedback_data['final_confidence'],
-                    'consistency': feedback_data.get('decision_consistency', 1.0)
+                    'consistency': feedback_data['decision_consistency']
                 }
             
             return None
@@ -5617,14 +4831,6 @@ class OnlineLearningManager:
         try:
             final_decision = feedback_data['final_decision']
             final_confidence = feedback_data['final_confidence']
-            symbol = feedback_data['symbol']  # Extract symbol from feedback_data
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
             
             # Convert decision to numerical target
             decision_mapping = {
@@ -5709,7 +4915,7 @@ class OnlineLearningManager:
                 'timestamp': feedback_data['timestamp'],
                 'decision': feedback_data['final_decision'],
                 'confidence': feedback_data['final_confidence'],
-                'consistency': feedback_data.get('decision_consistency', 1.0)
+                'consistency': feedback_data['decision_consistency']
             })
             
             # Gich100 records g n nh t
@@ -5729,30 +4935,11 @@ class OnlineLearningManager:
                 performance_data = {
                     'recent_decisions': [feedback_data['final_decision']],
                     'recent_confidences': [feedback_data['final_confidence']],
-                    'consistency_scores': [feedback_data.get('decision_consistency', 1.0)]
+                    'consistency_scores': [feedback_data['decision_consistency']]
                 }
                 
-                # Check drift - provide all required arguments
-                try:
-                    # Get additional required data for drift detection
-                    data_samples = {
-                        'new': [feedback_data.get('final_confidence', 0.5)],
-                        'old': [0.5]  # Default baseline
-                    }
-                    feature_importance = {
-                        'new': {'confidence': feedback_data.get('final_confidence', 0.5)},
-                        'old': {'confidence': 0.5}
-                    }
-                    
-                    drift_result = drift_detector.detect_drift(
-                        symbol, 
-                        performance_data=performance_data,
-                        data_samples=data_samples,
-                        feature_importance=feature_importance
-                    )
-                except Exception as drift_error:
-                    logging.error(f"Error in drift detection for {symbol}: {drift_error}")
-                    drift_result = None
+                # Check drift
+                drift_result = drift_detector.detect_drift(symbol, performance_data=performance_data)
                 
                 if drift_result and drift_result.get('should_retrain', False):
                     logging.warning(f"⚠️ [Concept Drift] Detected drift for {symbol}: {drift_result.get('reason', 'Unknown')}")
@@ -5767,19 +4954,9 @@ class OnlineLearningManager:
         try:
             if symbol not in self.models:
                 return "HOLD", 0.5
-
-            # Check if market data is empty or invalid
-            if market_data is None or (hasattr(market_data, 'empty') and market_data.empty):
-                logging.warning(f"[Online Learning] Empty market data for {symbol}, returning HOLD with default confidence")
-                return "HOLD", 0.5
             
             # Extract features - now returns numpy array
             features = self._extract_features_from_market_data(market_data)
-            
-            # Check if features are all zeros (indicating empty/invalid data)
-            if isinstance(features, np.ndarray) and np.all(features == 0):
-                logging.warning(f"[Online Learning] All-zero features for {symbol}, returning HOLD with default confidence")
-                return "HOLD", 0.5
             
             # Ensure features is properly formatted - features is already numpy array
             if isinstance(features, np.ndarray):
@@ -5795,35 +4972,14 @@ class OnlineLearningManager:
                 # Convert numpy array to dictionary for River
                 features_for_pred = self._ensure_river_format(features_array.flatten())
                 prediction = model.predict_one(features_for_pred)
-                # Enhanced logging for online learning predictions
-                pred_logger = get_trading_logger('MLPredictor')
-                log_prediction(pred_logger, symbol, {
-                    'direction': 'BUY' if prediction > 0.5 else 'SELL',
-                    'confidence': float(prediction),
-                    'model': 'OnlineLearningModel'
-                })
                 
                 # Convert prediction to decision
                 if prediction > 0.3:
                     decision = "BUY"
                     confidence = min(prediction, 0.9)
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'BUY',
-                        'strength': confidence,
-                        'source': 'OnlineLearningModel'
-                    })
                 elif prediction < -0.3:
                     decision = "SELL"
                     confidence = min(abs(prediction), 0.9)
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'SELL',
-                        'strength': confidence,
-                        'source': 'OnlineLearningModel'
-                    })
                 else:
                     decision = "HOLD"
                     confidence = 0.5
@@ -5832,35 +4988,14 @@ class OnlineLearningManager:
                 model = self.models[symbol]
                 # Use numpy array directly for sklearn
                 prediction = model.predict(features_array)[0]
-                # Enhanced logging for traditional ML predictions
-                pred_logger = get_trading_logger('MLPredictor')
-                log_prediction(pred_logger, symbol, {
-                    'direction': 'BUY' if prediction > 0.5 else 'SELL',
-                    'confidence': float(prediction),
-                    'model': 'TraditionalMLModel'
-                })
                 
                 # Convert prediction to decision
                 if prediction > 0.5:
                     decision = "BUY"
                     confidence = prediction
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'BUY',
-                        'strength': confidence,
-                        'source': 'TraditionalMLModel'
-                    })
                 elif prediction < 0.5:
                     decision = "SELL"
                     confidence = 1 - prediction
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'SELL',
-                        'strength': confidence,
-                        'source': 'TraditionalMLModel'
-                    })
                 else:
                     decision = "HOLD"
                     confidence = 0.5
@@ -5878,77 +5013,6 @@ class OnlineLearningManager:
                 logging.error("Features not available due to earlier error")
             logging.error(f"Market data keys: {list(market_data.keys()) if hasattr(market_data, 'keys') else 'No keys'}")
             return "HOLD", 0.5
-
-class ConceptDriftDetector:
-    """Advanced concept drift detection with configurable sensitivity"""
-    
-    def __init__(self):
-        # Configurable thresholds for drift detection - ADJUSTED FOR STABILITY
-        self.data_drift_threshold = 0.005  # More conservative threshold to reduce false positives
-        self.performance_drift_threshold = 0.25  # 25% performance drop (more tolerant)
-        self.feature_importance_threshold = 0.35  # 35% change in feature importance (more tolerant)
-        
-    def detect_drift(self, symbol, performance_data, data_samples, feature_importance):
-        """
-        Comprehensive drift detection with improved sensitivity
-        Returns: dict with overall_drift and details
-        """
-        try:
-            drift_results = {
-                "overall_drift": False,
-                "details": {}
-            }
-            
-            # 1. Performance drift check
-            recent_perf = performance_data.get('recent', 0.5)
-            baseline_perf = performance_data.get('baseline', 0.5)
-            
-            if baseline_perf > 0:
-                perf_change = abs(recent_perf - baseline_perf) / baseline_perf
-                if perf_change > self.performance_drift_threshold:
-                    drift_results["details"]["performance"] = f"Performance drift: {perf_change:.2%} change"
-                    drift_results["overall_drift"] = True
-                else:
-                    drift_results["details"]["performance"] = f"Performance stable: {perf_change:.2%}"
-            
-            # 2. Data drift check (using KS test with adjusted threshold)
-            try:
-                from scipy.stats import ks_2samp
-                new_data = data_samples.get('new', [])
-                old_data = data_samples.get('old', [])
-                
-                if len(new_data) > 10 and len(old_data) > 10:
-                    ks_stat, p_value = ks_2samp(new_data, old_data)
-                    
-                    # CRITICAL FIX: More strict threshold to reduce false positives
-                    if p_value < self.data_drift_threshold:
-                        drift_results["details"]["data"] = f"Data drift detected: KS p-value={p_value:.4f}"
-                        drift_results["overall_drift"] = True
-                    else:
-                        drift_results["details"]["data"] = f"Data stable: KS p-value={p_value:.4f}"
-                else:
-                    drift_results["details"]["data"] = "Insufficient data for KS test"
-                    
-            except ImportError:
-                drift_results["details"]["data"] = "scipy not available for KS test"
-            except Exception as e:
-                drift_results["details"]["data"] = f"Data drift test error: {e}"
-            
-            # 3. Feature importance drift check
-            if feature_importance and len(feature_importance) > 0:
-                # Simplified feature importance check
-                # In real implementation, compare with historical importance
-                drift_results["details"]["features"] = "Feature importance stable: overlap=100.00%"
-            else:
-                drift_results["details"]["features"] = "No feature importance data available"
-            
-            return drift_results
-            
-        except Exception as e:
-            return {
-                "overall_drift": False,
-                "details": {"error": f"Drift detection error: {e}"}
-            }
 
 class DynamicEnsembleManager:
     """Dynamic ensemble weight adjustment based on recent performance"""
@@ -6063,28 +5127,11 @@ class AutoRetrainManager:
         # Initialize concept drift detection
         self.drift_detector = ConceptDriftDetector()
         
-        # Initialize online learning with bootstrap support
-        if BOOTSTRAP_AVAILABLE:
-            try:
-                self.online_learning = create_enhanced_online_learning_manager(bot_instance)
-                print("✅ [Bootstrap] EnhancedOnlineLearningManager initialized")
-            except Exception as e:
-                print(f"⚠️ [Bootstrap] Failed to initialize enhanced manager, using standard: {e}")
-                self.online_learning = OnlineLearningManager(bot_instance)
-        else:
-            self.online_learning = OnlineLearningManager(bot_instance)
+        # Initialize online learning
+        self.online_learning = OnlineLearningManager(bot_instance)
         
         # Initialize online learning models for all active symbols
-        # Enhanced initialization with bootstrap support
-        if BOOTSTRAP_AVAILABLE and hasattr(self.online_learning, 'initialize_all_online_models_with_bootstrap'):
-            bootstrap_report = self.online_learning.initialize_all_online_models_with_bootstrap(list(self.bot.active_symbols))
-            print(f"🚀 [Bootstrap] Initialization completed:")
-            print(f"   - Symbols processed: {bootstrap_report['overall_stats']['successful_initializations']}/{bootstrap_report['total_symbols']}")
-            print(f"   - Bootstrap samples used: {bootstrap_report['overall_stats']['total_bootstrap_samples']}")
-            print(f"   - Processing time: {bootstrap_report['overall_stats']['total_initialization_time']:.2f}s")
-        else:
-            self.online_learning.initialize_all_online_models(list(self.bot.active_symbols))
-            print("⚠️ [Bootstrap] Using standard initialization (Bootstrap not available)")
+        self.online_learning.initialize_all_online_models(list(bot_instance.active_symbols))
         
         # Check status of all Online Learning models
         self.online_learning.check_online_learning_status()
@@ -6293,26 +5340,11 @@ class AutoRetrainManager:
         return current_version != self.model_version
     
     def trigger_retrain(self, symbol, reason):
-        """Trigger retraining for a symbol with cooldown protection"""
-        # Check cooldown period
-        cooldown_hours = self.config["RETRAIN_SETTINGS"].get("RETRAIN_COOLDOWN_HOURS", 6)
-        last_retrain = self.last_retrain_time.get(symbol)
-        
-        if last_retrain:
-            time_since_last = datetime.now() - last_retrain
-            if time_since_last.total_seconds() < (cooldown_hours * 3600):
-                remaining_time = cooldown_hours * 3600 - time_since_last.total_seconds()
-                print(f"⏰ [Auto-Retrain] {symbol} in cooldown. Remaining: {remaining_time/3600:.1f}h")
-                return False
-        
+        """Trigger retraining for a symbol"""
         if not self.config["RETRAIN_SETTINGS"]["IMMEDIATE_RETRAIN"]:
-            print(f"📋 [Auto-Retrain] {symbol} scheduled for retrain: {reason}")
             return False
         
         print(f"🔄 [Auto-Retrain] Triggering retrain for {symbol}: {reason}")
-        
-        # Update last retrain time
-        self.last_retrain_time[symbol] = datetime.now()
         
         # Backup fromodels if enabled
         if self.config["RETRAIN_SETTINGS"]["BACKUP_BEFORE_RETRAIN"]:
@@ -6588,524 +5620,6 @@ class NewsApiOrgProvider(NewsProvider):
         except Exception as e:
             logging.error(f"NewsAPI.org error: {e}")
             return []
-
-# ==============================================================================
-# ECONOMIC CALENDAR PROVIDERS
-# ==============================================================================
-
-class EconomicCalendarProvider(ABC):
-    """Abstract base class for economic calendar providers"""
-    def __init__(self, api_key=None):
-        self.api_key = api_key
-        self.enabled = True
-        self.last_call_time = 0
-        self.rate_limit_delay = 1  # Default 1 second between calls
-        
-    @abstractmethod
-    async def fetch_economic_events(self, session, start_date: str, end_date: str):
-        """Fetch economic events for date range. Must return standardized format."""
-        pass
-    
-    def _standardize_event(self, title: str, date: str, time: str, currency: str, 
-                          importance: str, forecast: str = "", previous: str = "", actual: str = ""):
-        """Helper to create standardized economic event format"""
-        return {
-            "title": title,
-            "date": date,
-            "time": time,
-            "currency": currency.upper(),
-            "importance": importance.lower(),
-            "forecast": forecast,
-            "previous": previous,
-            "actual": actual,
-            "source": self.__class__.__name__
-        }
-    
-    async def _rate_limit_check(self):
-        """Check and enforce rate limiting"""
-        import time
-        current_time = time.time()
-        time_since_last_call = current_time - self.last_call_time
-        
-        if time_since_last_call < self.rate_limit_delay:
-            wait_time = self.rate_limit_delay - time_since_last_call
-            await asyncio.sleep(wait_time)
-        
-        self.last_call_time = time.time()
-
-class YahooFinanceEconomicProvider(EconomicCalendarProvider):
-    """Yahoo Finance economic calendar provider (free)"""
-    
-    def __init__(self):
-        super().__init__()
-        self.base_url = "https://query1.finance.yahoo.com/v1/finance"
-        self.rate_limit_delay = 0.5  # 0.5 second delay
-        
-    async def fetch_economic_events(self, session, start_date: str, end_date: str):
-        """Fetch economic events from Yahoo Finance"""
-        if not self.enabled:
-            return []
-            
-        await self._rate_limit_check()
-        
-        try:
-            # Yahoo Finance doesn't have a direct economic calendar API, 
-            # but we can get earnings calendar and major events
-            url = f"{self.base_url}/calendar"
-            params = {
-                'region': 'US',
-                'lang': 'en-US',
-                'from': start_date,
-                'to': end_date
-            }
-            
-            async with session.get(url, params=params, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return self._parse_yahoo_events(data)
-                else:
-                    logging.warning(f"Yahoo Finance calendar API returned status {response.status}")
-                    return []
-                    
-        except Exception as e:
-            logging.error(f"Yahoo Finance economic calendar error: {e}")
-            return []
-    
-    def _parse_yahoo_events(self, data):
-        """Parse Yahoo Finance calendar data"""
-        events = []
-        try:
-            # Parse earnings calendar as economic events
-            if 'earnings' in data:
-                for earning in data['earnings']['result']:
-                    events.append(self._standardize_event(
-                        title=f"{earning.get('companyName', 'Unknown')} Earnings",
-                        date=earning.get('date', ''),
-                        time=earning.get('time', ''),
-                        currency='USD',
-                        importance='medium',
-                        forecast=earning.get('epsEstimate', ''),
-                        actual=earning.get('epsActual', '')
-                    ))
-        except Exception as e:
-            logging.error(f"Error parsing Yahoo Finance events: {e}")
-            
-        return events
-
-class FREDEconomicProvider(EconomicCalendarProvider):
-    """Federal Reserve Economic Data (FRED) provider (free)"""
-    
-    def __init__(self, api_key="free"):
-        super().__init__(api_key)
-        self.base_url = "https://api.stlouisfed.org/fred"
-        self.rate_limit_delay = 0.5  # FRED allows 120 requests per minute
-        
-        # Key economic indicators to track
-        self.key_indicators = {
-            'GDP': 'GDP',
-            'CPI': 'CPIAUCSL',
-            'Unemployment': 'UNRATE',
-            'Federal Funds Rate': 'FEDFUNDS',
-            'Consumer Sentiment': 'UMCSENT',
-            'Retail Sales': 'RSXFS',
-            'Industrial Production': 'INDPRO',
-            'Housing Starts': 'HOUST'
-        }
-        
-    async def fetch_economic_events(self, session, start_date: str, end_date: str):
-        """Fetch economic indicators from FRED"""
-        if not self.enabled:
-            return []
-            
-        events = []
-        
-        for indicator_name, series_id in self.key_indicators.items():
-            await self._rate_limit_check()
-            
-            try:
-                # Get latest release dates for this series
-                url = f"{self.base_url}/series/observations"
-                params = {
-                    'series_id': series_id,
-                    'api_key': 'free',  # FRED doesn't require registration for basic access
-                    'file_type': 'json',
-                    'observation_start': start_date,
-                    'observation_end': end_date,
-                    'sort_order': 'desc',
-                    'limit': 5
-                }
-                
-                async with session.get(url, params=params, timeout=10) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        events.extend(self._parse_fred_data(data, indicator_name))
-                    else:
-                        logging.warning(f"FRED API returned status {response.status} for {indicator_name}")
-                        
-            except Exception as e:
-                logging.error(f"FRED API error for {indicator_name}: {e}")
-                continue
-                
-        return events
-    
-    def _parse_fred_data(self, data, indicator_name):
-        """Parse FRED API response"""
-        events = []
-        try:
-            observations = data.get('observations', [])
-            for obs in observations:
-                if obs.get('value') != '.':  # FRED uses '.' for missing values
-                    events.append(self._standardize_event(
-                        title=f"{indicator_name} Release",
-                        date=obs.get('date', ''),
-                        time="08:30",  # Most US economic data released at 8:30 AM ET
-                        currency='USD',
-                        importance='high',
-                        actual=obs.get('value', ''),
-                        forecast='',
-                        previous=''
-                    ))
-        except Exception as e:
-            logging.error(f"Error parsing FRED data for {indicator_name}: {e}")
-            
-        return events
-
-class ForexFactoryEconomicProvider(EconomicCalendarProvider):
-    """Forex Factory economic calendar provider (free scraping)"""
-    
-    def __init__(self):
-        super().__init__()
-        self.base_url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-        self.rate_limit_delay = 2  # Be respectful with scraping
-        
-    async def fetch_economic_events(self, session, start_date: str, end_date: str):
-        """Fetch economic events from Forex Factory"""
-        if not self.enabled:
-            return []
-            
-        await self._rate_limit_check()
-        
-        try:
-            # Forex Factory free JSON feed
-            async with session.get(self.base_url, timeout=15) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return self._parse_forex_factory_events(data, start_date, end_date)
-                else:
-                    logging.warning(f"Forex Factory API returned status {response.status}")
-                    return []
-                    
-        except Exception as e:
-            logging.error(f"Forex Factory economic calendar error: {e}")
-            return []
-    
-    def _parse_forex_factory_events(self, data, start_date: str, end_date: str):
-        """Parse Forex Factory calendar data"""
-        events = []
-        try:
-            from datetime import datetime, timedelta
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-            
-            for event in data:
-                try:
-                    # Parse event date
-                    event_date_str = event.get('date', '')
-                    if not event_date_str:
-                        continue
-                        
-                    event_date = datetime.strptime(event_date_str, '%Y-%m-%d')
-                    
-                    # Filter by date range
-                    if start_dt <= event_date <= end_dt:
-                        # Map impact to importance
-                        impact = event.get('impact', '').lower()
-                        importance_map = {
-                            'high': 'high',
-                            'medium': 'medium', 
-                            'low': 'low',
-                            'holiday': 'low'
-                        }
-                        importance = importance_map.get(impact, 'medium')
-                        
-                        events.append(self._standardize_event(
-                            title=event.get('title', ''),
-                            date=event_date_str,
-                            time=event.get('time', ''),
-                            currency=event.get('currency', ''),
-                            importance=importance,
-                            forecast=event.get('forecast', ''),
-                            previous=event.get('previous', ''),
-                            actual=event.get('actual', '')
-                        ))
-                        
-                except Exception as e:
-                    logging.error(f"Error parsing individual Forex Factory event: {e}")
-                    continue
-                    
-        except Exception as e:
-            logging.error(f"Error parsing Forex Factory events: {e}")
-            
-        return events
-
-class AlphaVantageEconomicProvider(EconomicCalendarProvider):
-    """Alpha Vantage economic indicators provider (free tier)"""
-    
-    def __init__(self, api_key="demo"):
-        super().__init__(api_key)
-        self.base_url = "https://www.alphavantage.co/query"
-        self.rate_limit_delay = 12  # Free tier: 5 requests per minute
-        
-        # Key economic functions available in Alpha Vantage
-        self.economic_functions = {
-            'Real GDP': 'REAL_GDP',
-            'Real GDP per Capita': 'REAL_GDP_PER_CAPITA', 
-            'Federal Funds Rate': 'FEDERAL_FUNDS_RATE',
-            'CPI': 'CPI',
-            'Inflation': 'INFLATION',
-            'Retail Sales': 'RETAIL_SALES',
-            'Consumer Sentiment': 'CONSUMER_SENTIMENT',
-            'Unemployment Rate': 'UNEMPLOYMENT'
-        }
-        
-    async def fetch_economic_events(self, session, start_date: str, end_date: str):
-        """Fetch economic indicators from Alpha Vantage"""
-        if not self.enabled:
-            return []
-            
-        events = []
-        
-        for indicator_name, function_name in self.economic_functions.items():
-            await self._rate_limit_check()
-            
-            try:
-                params = {
-                    'function': function_name,
-                    'apikey': self.api_key if self.api_key != "free" else "demo",
-                    'datatype': 'json'
-                }
-                
-                async with session.get(self.base_url, params=params, timeout=15) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        events.extend(self._parse_alpha_vantage_data(data, indicator_name))
-                    else:
-                        logging.warning(f"Alpha Vantage API returned status {response.status} for {indicator_name}")
-                        
-            except Exception as e:
-                logging.error(f"Alpha Vantage API error for {indicator_name}: {e}")
-                continue
-                
-        return events
-    
-    def _parse_alpha_vantage_data(self, data, indicator_name):
-        """Parse Alpha Vantage economic data"""
-        events = []
-        try:
-            # Alpha Vantage returns data in different formats
-            if 'data' in data:
-                data_points = data['data'][:5]  # Get latest 5 data points
-                for point in data_points:
-                    events.append(self._standardize_event(
-                        title=f"{indicator_name} Release",
-                        date=point.get('date', ''),
-                        time="08:30",  # Default release time
-                        currency='USD',
-                        importance='high',
-                        actual=point.get('value', ''),
-                        forecast='',
-                        previous=''
-                    ))
-        except Exception as e:
-            logging.error(f"Error parsing Alpha Vantage data for {indicator_name}: {e}")
-            
-        return events
-
-# ==============================================================================
-# ECONOMIC CALENDAR MANAGER
-# ==============================================================================
-
-class EconomicCalendarManager:
-    """Manager class for aggregating economic events from multiple free providers"""
-    
-    def __init__(self):
-        self.providers = []
-        self.cache = {}
-        self.cache_timeout = 3600  # 1 hour cache
-        self.last_fetch_time = {}
-        
-        # Initialize all free providers
-        self._initialize_providers()
-        
-    def _initialize_providers(self):
-        """Initialize all available economic calendar providers"""
-        try:
-            # Add Forex Factory provider (most reliable free source)
-            forex_factory = ForexFactoryEconomicProvider()
-            if forex_factory.enabled:
-                self.providers.append(forex_factory)
-                logging.info("✅ [EconomicCalendarManager] Forex Factory provider enabled")
-            
-            # Add FRED provider for US economic data
-            fred = FREDEconomicProvider()
-            if fred.enabled:
-                self.providers.append(fred)
-                logging.info("✅ [EconomicCalendarManager] FRED provider enabled")
-            
-            # Add Yahoo Finance provider
-            yahoo = YahooFinanceEconomicProvider()
-            if yahoo.enabled:
-                self.providers.append(yahoo)
-                logging.info("✅ [EconomicCalendarManager] Yahoo Finance provider enabled")
-            
-            # Add Alpha Vantage provider
-            alpha_vantage = AlphaVantageEconomicProvider()
-            if alpha_vantage.enabled:
-                self.providers.append(alpha_vantage)
-                logging.info("✅ [EconomicCalendarManager] Alpha Vantage provider enabled")
-                
-            logging.info(f"📊 [EconomicCalendarManager] Initialized {len(self.providers)} economic calendar providers")
-            
-        except Exception as e:
-            logging.error(f"Error initializing economic calendar providers: {e}")
-    
-    async def get_economic_calendar(self, start_date: str = None, end_date: str = None):
-        """
-        Get aggregated economic calendar from all providers
-        Returns list of standardized economic events
-        """
-        from datetime import datetime, timedelta
-        
-        # Set default date range if not provided
-        if not start_date:
-            start_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
-        if not end_date:
-            end_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-        
-        cache_key = f"{start_date}_{end_date}"
-        
-        # Check cache first
-        if cache_key in self.cache:
-            cache_time = self.last_fetch_time.get(cache_key, 0)
-            if (datetime.now().timestamp() - cache_time) < self.cache_timeout:
-                logging.info(f"📋 [EconomicCalendarManager] Using cached calendar data for {start_date} to {end_date}")
-                return self.cache[cache_key]
-        
-        # Fetch from all providers
-        all_events = []
-        
-        if not self.providers:
-            logging.warning("⚠️ [EconomicCalendarManager] No economic calendar providers available")
-            return []
-        
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for provider in self.providers:
-                if provider.enabled:
-                    tasks.append(self._fetch_from_provider(session, provider, start_date, end_date))
-            
-            if tasks:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        logging.error(f"Provider {self.providers[i].__class__.__name__} failed: {result}")
-                    elif isinstance(result, list):
-                        all_events.extend(result)
-                        logging.info(f"📊 [EconomicCalendarManager] {self.providers[i].__class__.__name__} returned {len(result)} events")
-        
-        # Remove duplicates and sort by date
-        unique_events = self._deduplicate_events(all_events)
-        sorted_events = sorted(unique_events, key=lambda x: (x.get('date', ''), x.get('time', '')))
-        
-        # Filter for high impact events only
-        high_impact_events = self._filter_high_impact_events(sorted_events)
-        
-        # Cache the results
-        self.cache[cache_key] = high_impact_events
-        self.last_fetch_time[cache_key] = datetime.now().timestamp()
-        
-        logging.info(f"📋 [EconomicCalendarManager] Aggregated {len(high_impact_events)} high-impact events from {len(self.providers)} providers")
-        
-        return high_impact_events
-    
-    async def _fetch_from_provider(self, session, provider, start_date: str, end_date: str):
-        """Fetch events from a single provider with error handling"""
-        try:
-            return await provider.fetch_economic_events(session, start_date, end_date)
-        except Exception as e:
-            logging.error(f"Error fetching from {provider.__class__.__name__}: {e}")
-            return []
-    
-    def _deduplicate_events(self, events):
-        """Remove duplicate events based on title, date, and time"""
-        seen = set()
-        unique_events = []
-        
-        for event in events:
-            # Create a unique key for each event
-            key = (
-                event.get('title', '').strip().lower(),
-                event.get('date', ''),
-                event.get('time', ''),
-                event.get('currency', '')
-            )
-            
-            if key not in seen:
-                seen.add(key)
-                unique_events.append(event)
-        
-        return unique_events
-    
-    def _filter_high_impact_events(self, events):
-        """Filter events to keep only high and medium impact ones"""
-        high_impact_keywords = [
-            'NFP', 'CPI', 'GDP', 'FOMC', 'Fed', 'Interest Rate', 'Employment', 
-            'Inflation', 'PMI', 'Retail Sales', 'Consumer Confidence',
-            'Industrial Production', 'Housing', 'Unemployment'
-        ]
-        
-        filtered_events = []
-        
-        for event in events:
-            # Keep events marked as high importance
-            if event.get('importance', '').lower() == 'high':
-                filtered_events.append(event)
-                continue
-            
-            # Keep events with high impact keywords in title
-            title = event.get('title', '').lower()
-            if any(keyword.lower() in title for keyword in high_impact_keywords):
-                # Upgrade importance to high for keyword matches
-                event['importance'] = 'high'
-                filtered_events.append(event)
-                continue
-            
-            # Keep medium impact events from reliable sources
-            if (event.get('importance', '').lower() == 'medium' and 
-                event.get('source', '') in ['ForexFactoryEconomicProvider', 'FREDEconomicProvider']):
-                filtered_events.append(event)
-        
-        return filtered_events
-    
-    def get_provider_status(self):
-        """Get status of all economic calendar providers"""
-        status = {
-            'total_providers': len(self.providers),
-            'enabled_providers': sum(1 for p in self.providers if p.enabled),
-            'providers': []
-        }
-        
-        for provider in self.providers:
-            status['providers'].append({
-                'name': provider.__class__.__name__,
-                'enabled': provider.enabled,
-                'rate_limit_delay': provider.rate_limit_delay,
-                'last_call_time': provider.last_call_time
-            })
-        
-        return status
-
 # L p this not thay d i
 # === ENHANCED NEWS FILTER ===
 class EnhancedNewsFilter:
@@ -7254,23 +5768,6 @@ class NewsEconomicManager:
             # Initialize news providers with API keys
             self._initialize_news_providers()
             print("✅ [NewsEconomicManager] News providers initialized")
-            
-            # Initialize Economic Calendar Manager with free providers
-            print("🔄 [NewsEconomicManager] Initializing Economic Calendar Manager...")
-            try:
-                self.economic_calendar_manager = EconomicCalendarManager()
-                print("✅ [NewsEconomicManager] Economic Calendar Manager initialized")
-                
-                # Log provider status
-                status = self.economic_calendar_manager.get_provider_status()
-                print(f"📊 [NewsEconomicManager] Economic Calendar: {status['enabled_providers']}/{status['total_providers']} providers enabled")
-                for provider in status['providers']:
-                    status_emoji = "✅" if provider['enabled'] else "❌"
-                    print(f"   {status_emoji} {provider['name']}: {'Enabled' if provider['enabled'] else 'Disabled'}")
-                    
-            except Exception as e:
-                print(f"⚠️ [NewsEconomicManager] Failed to initialize Economic Calendar Manager: {e}")
-                self.economic_calendar_manager = None
         
             # API rate limiting
             self.api_call_times = {}
@@ -7366,8 +5863,6 @@ class NewsEconomicManager:
                     print("✅ [API Test] Marketaux API: Connected")
                 else:
                     print(f"📊 [API Test] Marketaux API: HTTP {response.status_code}")
-                    if response.status_code == 404:
-                        API_ERROR_LOGGED['marketaux_404'] = True
             
             # Test NewsAPI
             if any(isinstance(p, NewsApiOrgProvider) and p.enabled for p in self.news_providers):
@@ -7377,8 +5872,6 @@ class NewsEconomicManager:
                     print("✅ [API Test] NewsAPI: Connected")
                 else:
                     print(f"📊 [API Test] NewsAPI: HTTP {response.status_code}")
-                    if response.status_code == 404:
-                        API_ERROR_LOGGED['news_api_404'] = True
             
             # Test EODHD API
             if any(isinstance(p, EODHDProvider) and p.enabled for p in self.news_providers):
@@ -7388,8 +5881,6 @@ class NewsEconomicManager:
                     print("✅ [API Test] EODHD API: Connected")
                 else:
                     print(f"📊 [API Test] EODHD API: HTTP {response.status_code}")
-                    if response.status_code == 401:
-                        API_ERROR_LOGGED['eodhd_401'] = True
                     
         except Exception as e:
             print(f" [API Test] Error testing API connectivity: {e}")
@@ -7399,12 +5890,6 @@ class NewsEconomicManager:
         Lấy lịch kinh tế từ Trading Economics.
         IMPORTANT: Integrate caching to call API once per day.
         """
-        # Enhanced error handling - check if Trading Economics API has failed
-        if API_ERROR_LOGGED.get('trading_economics_403', False) or API_ERROR_LOGGED.get('trading_economics_401', False):
-            logging.info("Trading Economics API previously failed - using cached fallback data")
-            # Return cached data if available, otherwise empty
-            return getattr(self, 'economic_calendar_cache', [])
-            
         # <<< LOGIC CACHING BẮT ĐẦU TẠI ĐÂY >>>
         today = datetime.utcnow().date()
         # if cache đã có và đã lấy trong ngày hôm nay, sử dụng lại cache
@@ -7432,23 +5917,8 @@ class NewsEconomicManager:
                 logging.info("Trading Economics not available - returning empty calendar")
                 return []
 
-            # Add rate limiting before API call
-            import time
-            current_time = time.time()
-            last_call_time = globals().get('TRADING_ECONOMICS_LAST_CALL', 0)
-            rate_limit = globals().get('TRADING_ECONOMICS_RATE_LIMIT', 60)
-            time_since_last_call = current_time - last_call_time
-            
-            if time_since_last_call < rate_limit:
-                wait_time = rate_limit - time_since_last_call
-                time.sleep(wait_time)
-            
-            # Update last call time
-            globals()['TRADING_ECONOMICS_LAST_CALL'] = time.time()
-
             # Try to get calendar data with additional error handling
             try:
-                logging.info(f"📊 Calling Trading Economics API for calendar data: {init_date} to {end_date}")
                 calendar_raw = te.getCalendarData(initDate=init_date, endDate=end_date)
             except AttributeError as attr_error:
                 if "apikey" in str(attr_error):
@@ -7459,11 +5929,8 @@ class NewsEconomicManager:
             except Exception as api_error:
                 error_msg = str(api_error)
                 if "403" in error_msg or "Forbidden" in error_msg:
-                    # Only log once to avoid spam
-                    if not API_ERROR_LOGGED['trading_economics_403']:
-                        logging.warning("⚠️ Trading Economic API access forbidden (403) - API key may be invalid or rate limited")
-                        logging.warning("⚠️ Bot will continue without Trading Economics data")
-                        API_ERROR_LOGGED['trading_economics_403'] = True
+                    logging.warning("⚠️ Trading Economic API access forbidden (403) - API key may be invalid or rate limited")
+                    logging.warning("⚠️ Bot will continue without Trading Economics data")
                     # Disable Trading Economics for this session to avoid repeated errors
                     try:
                         globals()['TRADING_ECONOMICS_AVAILABLE'] = False
@@ -7474,17 +5941,10 @@ class NewsEconomicManager:
                         pass
                     return []
                 elif "401" in error_msg or "Unauthorized" in error_msg:
-                    if not API_ERROR_LOGGED['trading_economics_401']:
-                        logging.warning("⚠️ Trading Economics API unauthorized (401) - API key may be invalid")
-                        API_ERROR_LOGGED['trading_economics_401'] = True
+                    logging.warning("⚠️ Trading Economics API unauthorized (401) - API key may be invalid")
                     return []
                 elif "429" in error_msg or "Too Many Requests" in error_msg:
                     logging.warning("⚠️ Trading Economic API rate limited (429) - too many requests")
-                    # Increase rate limit for future calls
-                    current_rate_limit = globals().get('TRADING_ECONOMICS_RATE_LIMIT', 60)
-                    new_rate_limit = min(300, current_rate_limit * 2)  # Max 5 minutes
-                    globals()['TRADING_ECONOMICS_RATE_LIMIT'] = new_rate_limit
-                    logging.info(f"🔄 Increased rate limit to {new_rate_limit}s to prevent future 429 errors")
                     return []
                 else:
                     logging.warning(f"⚠️ Trading Economics API error: {api_error}")
@@ -7854,10 +6314,6 @@ class NewsEconomicManager:
             print(f"❌ [News Reader] Error reading news from file: {e}")
             return None
     
-    def get_latest_news(self):
-        """Get latest news data - alias for get_latest_news_summary for compatibility"""
-        return self.get_latest_news_summary()
-    
     def get_latest_news_summary(self):
         """Get summary of latest news for bot consumption"""
         try:
@@ -7907,52 +6363,71 @@ class NewsEconomicManager:
         """
         IMPORTANT: All news sentiment data is integrated into DataFrame.
         Phase 2: News Sentiment Features - needs RETRAIN MODEL
-        Optimized version using vectorized operations for better performance.
         """
         print(f" [NewsFeatures] Starting to add news sentiment features for {symbol}...")
         logging.info(f"   [Features] Starting to add news sentiment features for {symbol}...")
         
         try:
+            # Initialize news sentiment features
+            df["news_sentiment_score"] = 0.0
+            df["news_sentiment_volume"] = 0
+            df["news_quality_score"] = 0.0
+            df["news_timing_score"] = 0.0
+            df["news_sentiment_trend"] = 0.0
+            df["news_impact_score"] = 0.0
+            
+            print(f"[NewsFeatures] Initialized news features columns for {symbol}")
+            
             # Get news data for the time period
             start_date = df.index.min()
             end_date = df.index.max()
+            
             print(f" [NewsFeatures] Processing period: {start_date} to {end_date}")
             
-            # Initialize news sentiment features with vectorized operations
-            print(f"[NewsFeatures] Initialized news features columns for {symbol}")
+            # Simulate news sentiment data (in real implementation, this would fetcontainsctual news)
+            # For now, we'll create synthetic features based on market conditions
             
-            # OPTIMIZED: Use vectorized operations instead of iterrows()
-            # Calculate price changes vectorized
-            price_changes = df['close'].diff().fillna(0)
-            
-            # News sentiment score (-1 to 1) - vectorized
-            df["news_sentiment_score"] = np.tanh(price_changes / df['close']) * 0.5
-            df["news_sentiment_score"] = df["news_sentiment_score"].fillna(0.0)
-            
-            # News volume (number of news items) - vectorized random generation
-            np.random.seed(42)  # For reproducible results
-            df["news_sentiment_volume"] = np.maximum(0, np.random.poisson(3, len(df)))
-            
-            # News quality score (0 to 1) - vectorized
-            df["news_quality_score"] = np.random.beta(2, 2, len(df))
-            
-            # News timing score (recent news more important) - vectorized
-            current_time = datetime.now()
-            if hasattr(df.index, 'tz_localize'):
-                # Handle timezone-aware timestamps
-                timestamps = df.index.tz_localize(None) if df.index.tz is not None else df.index
-            else:
-                timestamps = df.index
-            
-            time_diffs = (current_time - timestamps).total_seconds()
-            df["news_timing_score"] = np.maximum(0, 1 - (time_diffs / (24 * 3600)))
-            
-            # News sentiment trend (moving average) - vectorized
-            df["news_sentiment_trend"] = df["news_sentiment_score"].rolling(window=5, min_periods=1).mean()
-            
-            # News impact score (combination of quality and timing) - vectorized
-            df["news_impact_score"] = df["news_quality_score"] * df["news_timing_score"]
-            
+            for i, (timestamp, row) in enumerate(df.iterrows()):
+                try:
+                    # Simulate news sentiment based on price movement
+                    price_change = row.get('close', 0) - df.iloc[max(0, i-1)].get('close', row.get('close', 0))
+                    
+                    # Initialize sentiment_score with default value
+                    sentiment_score = 0.0
+                    
+                    # News sentiment score (-1 to 1)
+                    if abs(price_change) > 0:
+                        sentiment_score = np.tanh(price_change / row.get('close', 1)) * 0.5
+                        df.at[timestamp, "news_sentiment_score"] = sentiment_score
+                    
+                    # News volume (number of news items)
+                    news_volume = max(0, int(np.random.poisson(3)))  # Simulate Poisson distribution
+                    df.at[timestamp, "news_sentiment_volume"] = news_volume
+                    
+                    # News quality score (0 to 1)
+                    quality_score = np.random.beta(2, 2)  # Beta distribution centered around 0.5
+                    df.at[timestamp, "news_quality_score"] = quality_score
+                    
+                    # News timing score (recent news more important)
+                    # Simplified timezone handling
+                    current_time = datetime.now()
+                    time_diff = (current_time - timestamp.replace(tzinfo=None)).total_seconds()
+                    timing_score = max(0, 1 - (time_diff / (24 * 3600)))  # Decay over 24 hours
+                    df.at[timestamp, "news_timing_score"] = timing_score
+                    
+                    # News sentiment trend (moving average of sentiment)
+                    if i >= 5:  # Need at least 5 previous values
+                        recent_sentiments = df.iloc[i-5:i]["news_sentiment_score"].mean()
+                        df.at[timestamp, "news_sentiment_trend"] = recent_sentiments
+                    
+                    # News impact score (combination of quality and timing)
+                    impact_score = quality_score * timing_score
+                    df.at[timestamp, "news_impact_score"] = impact_score
+        
+                except Exception as e:
+                    print(f" [NewsFeatures] Error processing row {i} for {symbol}: {e}")
+                    continue
+        
             print(f"[NewsFeatures] Successfully added news sentiment features for {symbol}")
             logging.info(f"   [Features] News sentiment feature added for {symbol}")
             return df
@@ -7970,7 +6445,7 @@ class NewsEconomicManager:
             df["news_timing_score"] = 0.0
             df["news_sentiment_trend"] = 0.0
             df["news_impact_score"] = 0.0
-            return df
+        return df
 
     def add_economic_event_features(self, df, symbol):
         """
@@ -7995,31 +6470,11 @@ class NewsEconomicManager:
                 trading_economics_available = False
                 
             if not trading_economics_available or not te:
-                logging.info("Trading Economics not available - using fallback features only")
+                logging.info("Trading Economics not available - skipping economic event features")
                 return df
 
-            # Check if Trading Economics API has already failed with 403/401
-            if API_ERROR_LOGGED.get('trading_economics_403', False) or API_ERROR_LOGGED.get('trading_economics_401', False):
-                logging.info("Trading Economics API previously failed - using fallback features only")
-                return df
-
-            # Enhanced error handling for Trading Economics API with rate limiting
+            # Enhanced error handling for Trading Economics API
             try:
-                # Add rate limiting before API call
-                import time
-                current_time = time.time()
-                last_call_time = globals().get('TRADING_ECONOMICS_LAST_CALL', 0)
-                rate_limit = globals().get('TRADING_ECONOMICS_RATE_LIMIT', 60)
-                time_since_last_call = current_time - last_call_time
-                
-                if time_since_last_call < rate_limit:
-                    wait_time = rate_limit - time_since_last_call
-                    time.sleep(wait_time)
-                
-                # Update last call time
-                globals()['TRADING_ECONOMICS_LAST_CALL'] = time.time()
-                
-                logging.info(f"📊 Calling Trading Economics API for economic events: {start_date} to {end_date}")
                 calendar_raw = te.getCalendarData(initDate=start_date, endDate=end_date)
                 if not isinstance(calendar_raw, list) or not calendar_raw:
                     logging.info("No economic calendar data available for the specified period")
@@ -8089,11 +6544,6 @@ class NewsEconomicManager:
                 trading_economics_available = False
                 
             if trading_economics_available and te:
-                # Check if Trading Economics API has already failed with 403/401
-                if API_ERROR_LOGGED.get('trading_economics_403', False) or API_ERROR_LOGGED.get('trading_economics_401', False):
-                    logging.info("Trading Economics API previously failed - using fallback features only")
-                    return df
-                    
                 # Enhanced error handling for Trading Economics API
                 try:
                     calendar_raw = te.getCalendarData(initDate=start_date, endDate=end_date)
@@ -9630,135 +8080,6 @@ class EnhancedEnsembleModel:
 
         return explanations
 
-    def get_economic_calendar(self, init_date=None, end_date=None):
-        """
-        Get economic calendar from free providers via EconomicCalendarManager.
-        This replaces the old Trading Economics implementation with multiple free sources.
-        """
-        try:
-            # Check if Economic Calendar Manager is available
-            if not hasattr(self, 'economic_calendar_manager') or self.economic_calendar_manager is None:
-                logging.warning("⚠️ [NewsEconomicManager] Economic Calendar Manager not available - using fallback")
-                return self._get_fallback_economic_events(init_date, end_date)
-            
-            # Set default date range if not provided
-            from datetime import datetime, timedelta
-            if not init_date:
-                init_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
-            if not end_date:
-                end_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-            
-            logging.info(f"📊 [NewsEconomicManager] Fetching economic calendar from free providers: {init_date} to {end_date}")
-            
-            # Use async function in sync context
-            import asyncio
-            try:
-                # Get or create event loop
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is already running, create a new task
-                    task = asyncio.create_task(
-                        self.economic_calendar_manager.get_economic_calendar(init_date, end_date)
-                    )
-                    # Wait for task completion
-                    events = loop.run_until_complete(task)
-                else:
-                    # If no loop is running, run in new loop
-                    events = loop.run_until_complete(
-                        self.economic_calendar_manager.get_economic_calendar(init_date, end_date)
-                    )
-            except RuntimeError:
-                # If we can't get event loop, run in new loop
-                events = asyncio.run(
-                    self.economic_calendar_manager.get_economic_calendar(init_date, end_date)
-                )
-            
-            # Convert to format expected by existing code
-            formatted_events = []
-            for event in events:
-                formatted_events.append({
-                    'Event': event.get('title', ''),
-                    'Date': event.get('date', ''),
-                    'Time': event.get('time', ''),
-                    'Currency': event.get('currency', ''),
-                    'Importance': event.get('importance', '').title(),  # Capitalize first letter
-                    'Forecast': event.get('forecast', ''),
-                    'Previous': event.get('previous', ''),
-                    'Actual': event.get('actual', ''),
-                    'Source': event.get('source', 'FreeProvider')
-                })
-            
-            logging.info(f"✅ [NewsEconomicManager] Retrieved {len(formatted_events)} economic events from free providers")
-            
-            # Update cache
-            today = datetime.now().date()
-            self.last_calendar_fetch_date = today
-            self.economic_calendar_cache = formatted_events
-            
-            return formatted_events
-            
-        except Exception as e:
-            logging.error(f"❌ [NewsEconomicManager] Error fetching economic calendar: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Return cached data if available
-            if hasattr(self, 'economic_calendar_cache') and self.economic_calendar_cache:
-                logging.info("📋 [NewsEconomicManager] Returning cached economic calendar data")
-                return self.economic_calendar_cache
-            
-            # Final fallback
-            return self._get_fallback_economic_events(init_date, end_date)
-    
-    def _get_fallback_economic_events(self, init_date=None, end_date=None):
-        """Fallback economic events when all providers fail"""
-        from datetime import datetime, timedelta
-        
-        if not init_date:
-            init_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
-        if not end_date:
-            end_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-        
-        # Create basic fallback events for major economic releases
-        fallback_events = [
-            {
-                'Event': 'US Non-Farm Payrolls (NFP)',
-                'Date': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
-                'Time': '08:30',
-                'Currency': 'USD',
-                'Importance': 'High',
-                'Forecast': '',
-                'Previous': '',
-                'Actual': '',
-                'Source': 'Fallback'
-            },
-            {
-                'Event': 'US Consumer Price Index (CPI)',
-                'Date': (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d'),
-                'Time': '08:30',
-                'Currency': 'USD',
-                'Importance': 'High',
-                'Forecast': '',
-                'Previous': '',
-                'Actual': '',
-                'Source': 'Fallback'
-            },
-            {
-                'Event': 'FOMC Interest Rate Decision',
-                'Date': (datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d'),
-                'Time': '14:00',
-                'Currency': 'USD',
-                'Importance': 'High',
-                'Forecast': '',
-                'Previous': '',
-                'Actual': '',
-                'Source': 'Fallback'
-            }
-        ]
-        
-        logging.info(f"📋 [NewsEconomicManager] Using {len(fallback_events)} fallback economic events")
-        return fallback_events
-
 class OrderSafetyManager:
     """Advanced order safety with multiple validation layers"""
 
@@ -10991,11 +9312,6 @@ class EnhancedDataManager:
         # Performance optimization: Cache for feature creation
         self._feature_cache = {}
         self._cache_ttl = 300  # 5 minutes cache TTL
-        
-        # Data fetching cache to avoid redundant API calls
-        self._data_cache = {}
-        self._data_cache_ttl = 600  # 10 minutes cache for data
-        self._last_cache_cleanup = time.time()
         self._max_cache_size = 50  # Maximum number of cached features
         
         # <<< TreceiveANG M I: Qu n l symbols needs retrain >>>
@@ -11100,23 +9416,7 @@ class EnhancedDataManager:
         return base_count
 
     def fetch_multi_timeframe_data(self, symbol, count=None, timeframes_to_use=None):
-        """Enhanced data fetching with asset class optimization and caching"""
-        # Clean old cache entries periodically
-        current_time = time.time()
-        if current_time - self._last_cache_cleanup > 300:  # Every 5 minutes
-            self._cleanup_data_cache()
-            self._last_cache_cleanup = current_time
-        
-        # Create cache key
-        cache_key = f"{symbol}_{count}_{str(timeframes_to_use)}"
-        
-        # Check cache first
-        if cache_key in self._data_cache:
-            cache_entry = self._data_cache[cache_key]
-            if current_time - cache_entry['timestamp'] < self._data_cache_ttl:
-                print(f"   [Data Cache] Using cached data for {symbol}")
-                return cache_entry['data']
-        
+        """Enhanced data fetching with asset class optimization"""
         all_data = {}
 
         # Getoptimal candle count for symbol
@@ -11191,31 +9491,7 @@ class EnhancedDataManager:
                 all_data[timeframe] = df
             except Exception as e:
                 print(f"Unexpected error {symbol} {timeframe}: {e}")
-        
-        # Cache the result if we got data
-        if all_data:
-            self._data_cache[cache_key] = {
-                'data': all_data,
-                'timestamp': current_time
-            }
-            print(f"   [Data Cache] Cached data for {symbol}")
-        
         return all_data
-    
-    def _cleanup_data_cache(self):
-        """Clean up expired cache entries"""
-        current_time = time.time()
-        expired_keys = []
-        
-        for key, entry in self._data_cache.items():
-            if current_time - entry['timestamp'] > self._data_cache_ttl:
-                expired_keys.append(key)
-        
-        for key in expired_keys:
-            del self._data_cache[key]
-        
-        if expired_keys:
-            print(f"   [Data Cache] Cleaned {len(expired_keys)} expired entries")
 
     def _get_oanda_instrument(self, symbol):
         """Enhanced instrumenfrom modelapping with all supported symbols"""
@@ -11567,23 +9843,6 @@ class EnhancedDataManager:
                     if col not in df_enhanced.columns:
                         df_enhanced[col] = 0.0
 
-            # <<< ADD ECONOMIC EVENT FEATURES >>>
-            # Add economic features that are required by the model
-            try:
-                print(f" [Features] Adding economic event features for {symbol}...")
-                if hasattr(self, 'news_manager') and self.news_manager is not None:
-                    df_enhanced = self.news_manager.add_economic_event_features(df_enhanced, symbol)
-                    print(f"[Features] Economic event features added for {symbol}")
-                else:
-                    # Add basic economic features if news_manager is not available
-                    print(f" [Features] News manager not available, adding basic economic features for {symbol}")
-                    self._add_basic_economic_features_direct(df_enhanced, symbol)
-            except Exception as e:
-                logging.error(f"Error adding economic features for {symbol}: {e}")
-                print(f"[Features] Error adding economic features for {symbol}: {e}")
-                # Add basic economic features as fallback
-                self._add_basic_economic_features_direct(df_enhanced, symbol)
-
             return df_enhanced
 
     def _encode_categorical_features(self, df, symbol):
@@ -11701,47 +9960,6 @@ class EnhancedDataManager:
         print(f"   [Encoding] Total {len(encoded_cols)} features encoded: {encoded_cols[:5]}...")
 
         return df
-
-    def _add_basic_economic_features_direct(self, df, symbol):
-        """Add basic economic event features directly to DataFrame"""
-        try:
-            # Add basic economic calendar features based on common patterns
-            df["is_near_high_impact_event"] = 0
-            
-            # Add day-of-week effects (common economic events happen on specific days)
-            df["is_friday"] = (df.index.dayofweek == 4).astype(int)
-            df["is_monday"] = (df.index.dayofweek == 0).astype(int)
-            
-            # Add month-end effects (common for economic data releases)
-            df["is_month_end"] = (df.index.day >= 25).astype(int)
-            
-            # Add quarterly effects (Q1, Q2, Q3, Q4)
-            df["quarter"] = df.index.quarter
-            df["is_q1"] = (df.index.quarter == 1).astype(int)
-            df["is_q2"] = (df.index.quarter == 2).astype(int)
-            df["is_q3"] = (df.index.quarter == 3).astype(int)
-            df["is_q4"] = (df.index.quarter == 4).astype(int)
-            
-            # Add holiday proximity effects (simplified)
-            df["is_holiday_proximity"] = 0  # Placeholder for holiday effects
-            
-            # Ensure all required features exist
-            required_features = ['is_q1', 'is_q2', 'is_q3', 'is_q4', 'is_month_end', 'is_holiday_proximity']
-            for feature in required_features:
-                if feature not in df.columns:
-                    df[feature] = 0
-                    
-            print(f"   [Features] Basic economic features added for {symbol}")
-            return df
-            
-        except Exception as e:
-            logging.error(f"Error adding basic economic features for {symbol}: {e}")
-            # Fallback: ensure critical features exist with default values
-            critical_features = ['is_q1', 'is_q2', 'is_q3', 'is_q4', 'is_month_end']
-            for feature in critical_features:
-                if feature not in df.columns:
-                    df[feature] = 0
-            return df
 
     # TFunction Function M I this VO in L P EnhancedDataManager
 
@@ -12030,8 +10248,7 @@ class PortfolioEnvironment(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(total_obs_size,), dtype=np.float32)
 
         # Store dimensions for validation
-        # CRITICAL FIX: Use fixed feature dimension for consistency
-        self.expected_market_dim = ML_CONFIG.get("FEATURE_SELECTION_TOP_K", 60)
+        self.expected_market_dim = single_symbol_market_features_dim
         self.expected_total_dim = total_obs_size
         self.action_space = spaces.MultiDiscrete([3] * self.n_symbols)
         # --- K T THC C I money ---
@@ -12048,18 +10265,15 @@ class PortfolioEnvironment(gym.Env):
             current_candle_data = self.dfs[symbol].iloc[self.current_step]
             market_obs = self.features[symbol][self.current_step]
 
-            # CRITICAL FIX: Ensure consistent feature dimensions across all symbols
-            # Use a fixed feature dimension for RL consistency
-            FIXED_FEATURE_DIM = ML_CONFIG.get("FEATURE_SELECTION_TOP_K", 60)
-            
-            if len(market_obs) != FIXED_FEATURE_DIM:
-                if len(market_obs) < FIXED_FEATURE_DIM:
+            # Validate v pad market_obs if needs
+            if len(market_obs) != self.expected_market_dim:
+                if len(market_obs) < self.expected_market_dim:
                     # Pad with zeros
-                    padding = np.zeros(FIXED_FEATURE_DIM - len(market_obs))
+                    padding = np.zeros(self.expected_market_dim - len(market_obs))
                     market_obs = np.append(market_obs, padding)
                 else:
                     # Truncate
-                    market_obs = market_obs[:FIXED_FEATURE_DIM]
+                    market_obs = market_obs[:self.expected_market_dim]
 
             all_atr_normalized.append(current_candle_data.get('atr_normalized', 0))
             if current_candle_data.get('market_regime', 0) != 0: trending_symbols_count += 1
@@ -12939,352 +11153,6 @@ class MarketRegimeDetector:
             logging.error(f"MarketRegimeDetector error: {e}")
             return "ranging", 0.5
 
-class ProductionConfidenceManager:
-    """
-    Advanced Confidence Calculation System for Production Environment
-    Implements multiple confidence calculation strategies with adaptive thresholds
-    """
-    
-    def __init__(self):
-        self.confidence_history = {}  # Store historical confidence and outcomes
-        self.market_conditions = {}   # Track market conditions for each symbol
-        self.performance_metrics = {} # Track success rates by confidence ranges
-        self.adaptive_weights = {}    # Dynamic weights for different signals
-        self.volatility_adjustments = {}  # Volatility-based adjustments
-        
-        # Production-ready thresholds
-        self.base_thresholds = {
-            'BUY': 0.15,   # Lower threshold for buy signals
-            'SELL': 0.15,  # Lower threshold for sell signals
-            'HOLD': 0.35   # Higher threshold for hold (no action)
-        }
-        
-        # Confidence calculation methods
-        self.calculation_methods = {
-            'weighted_average': self._weighted_average_confidence,
-            'bayesian_fusion': self._bayesian_confidence_fusion,
-            'ensemble_voting': self._ensemble_voting_confidence,
-            'adaptive_dynamic': self._adaptive_dynamic_confidence
-        }
-        
-        # Current method (can be changed based on performance)
-        self.current_method = 'adaptive_dynamic'
-    
-    def calculate_final_confidence(self, symbol: str, signals: dict, market_data: dict = None) -> tuple:
-        """
-        Calculate final confidence using the selected method
-        
-        Args:
-            symbol: Trading symbol
-            signals: Dict containing all signal sources and their confidences
-            market_data: Optional market condition data
-            
-        Returns:
-            tuple: (final_decision, final_confidence, method_used)
-        """
-        try:
-            # Update market conditions
-            if market_data:
-                self._update_market_conditions(symbol, market_data)
-            
-            # Apply the selected calculation method
-            method = self.calculation_methods[self.current_method]
-            final_decision, final_confidence = method(symbol, signals)
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
-            
-            # Apply production adjustments
-            final_confidence = self._apply_production_adjustments(symbol, final_decision, final_confidence, signals)
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
-            
-            # Store for learning
-            self._store_confidence_data(symbol, signals, final_decision, final_confidence)
-            
-            return final_decision, final_confidence, self.current_method
-            
-        except Exception as e:
-            logging.error(f"Error calculating final confidence for {symbol}: {e}")
-            # Fallback to simple weighted average
-            return self._weighted_average_confidence(symbol, signals)
-    
-    def _adaptive_dynamic_confidence(self, symbol: str, signals: dict) -> tuple:
-        """
-        Advanced adaptive confidence calculation for production
-        Considers market conditions, volatility, and historical performance
-        """
-        if not signals:
-            return 'HOLD', 0.5
-        
-        # Extract signal data
-        signal_values = {}
-        confidences = {}
-        
-        for source, data in signals.items():
-            if isinstance(data, dict) and 'action' in data and 'confidence' in data:
-                signal_values[source] = data['action']
-                confidences[source] = data['confidence']
-            elif isinstance(data, tuple) and len(data) >= 2:
-                signal_values[source] = data[0]
-                confidences[source] = data[1]
-        
-        if not signal_values:
-            return 'HOLD', 0.5
-        
-        # Get adaptive weights based on recent performance
-        weights = self._get_adaptive_weights(symbol, signal_values.keys())
-        
-        # Calculate weighted confidence for each action
-        action_confidences = {'BUY': 0.0, 'SELL': 0.0, 'HOLD': 0.0}
-        total_weight = 0.0
-        
-        for source, action in signal_values.items():
-            weight = weights.get(source, 0.25)
-            confidence = confidences.get(source, 0.5)
-            
-            # Apply market condition adjustments
-            adjusted_confidence = self._apply_market_adjustments(symbol, confidence, action)
-            
-            action_confidences[action] += weight * adjusted_confidence
-            total_weight += weight
-        
-        # Normalize confidences
-        if total_weight > 0:
-            for action in action_confidences:
-                action_confidences[action] /= total_weight
-        
-        # Find the action with highest confidence
-        final_decision, final_confidence = max(action_confidences.items(), key=lambda x: x[1])
-        # Enhanced logging for confidence
-        conf_logger = get_trading_logger('ConfidenceManager')
-        log_confidence(conf_logger, symbol, {
-            'final': final_confidence,
-            'method': 'production_confidence',
-            'components': {'base': final_confidence}
-        }) 
-        
-        return final_decision, final_confidence
-    
-    def _get_adaptive_weights(self, symbol: str, sources: list) -> dict:
-        """Get adaptive weights based on recent performance of each signal source"""
-        if symbol not in self.adaptive_weights:
-            # Initialize with equal weights
-            return {source: 1.0 / len(sources) for source in sources}
-        
-        symbol_weights = self.adaptive_weights[symbol]
-        total_weight = sum(symbol_weights.values())
-        
-        if total_weight == 0:
-            return {source: 1.0 / len(sources) for source in sources}
-        
-        # Normalize weights
-        return {source: weight / total_weight for source, weight in symbol_weights.items()}
-    
-    def _apply_market_adjustments(self, symbol: str, confidence: float, action: str) -> float:
-        """Apply market condition adjustments to confidence"""
-        if symbol not in self.market_conditions:
-            return confidence
-        
-        conditions = self.market_conditions[symbol]
-        
-        # Adjust based on volatility
-        volatility = conditions.get('volatility', 0.5)
-        if volatility > 0.8:  # High volatility
-            if action in ['BUY', 'SELL']:
-                confidence *= 1.15  # Boost trading signals in volatile markets
-            else:
-                confidence *= 0.85  # Reduce hold signals in volatile markets
-        elif volatility < 0.2:  # Low volatility
-            if action in ['BUY', 'SELL']:
-                confidence *= 0.9   # Reduce trading signals in calm markets
-            else:
-                confidence *= 1.1   # Boost hold signals in calm markets
-        
-        # Adjust based on trend strength
-        trend_strength = conditions.get('trend_strength', 0.5)
-        if trend_strength > 0.7 and action != 'HOLD':
-            confidence *= 1.1  # Boost trading signals in strong trends
-        
-        return min(0.95, max(0.05, confidence))
-    
-    def _apply_risk_adjustments(self, symbol: str, confidence: float) -> float:
-        """Apply risk-based adjustments to final confidence"""
-        # Get symbol's recent performance
-        if symbol in self.performance_metrics:
-            perf = self.performance_metrics[symbol]
-            success_rate = perf.get('success_rate', 0.5)
-            
-            # Adjust confidence based on recent success rate
-            if success_rate > 0.7:
-                confidence *= 1.05  # Boost confidence for well-performing symbols
-            elif success_rate < 0.3:
-                confidence *= 0.85  # Reduce confidence for poorly performing symbols
-        
-        return min(0.95, max(0.05, confidence))
-    
-    def _apply_production_adjustments(self, symbol: str, decision: str, confidence: float, signals: dict) -> float:
-        """Apply production-specific adjustments"""
-        # Minimum confidence thresholds for production
-        min_confidence = self.base_thresholds.get(decision, 0.2)
-        
-        # If confidence is too low, reduce it further to prevent weak signals
-        if confidence < min_confidence:
-            confidence *= 0.7
-        
-        # Boost confidence if multiple signals agree
-        signal_actions = [data.get('action') if isinstance(data, dict) else data[0] if isinstance(data, tuple) else 'HOLD' 
-                         for data in signals.values()]
-        
-        agreement_count = sum(1 for action in signal_actions if action == decision)
-        total_signals = len(signal_actions)
-        
-        if total_signals > 0:
-            agreement_ratio = agreement_count / total_signals
-            if agreement_ratio >= 0.75:  # Strong agreement
-                confidence *= 1.1
-            elif agreement_ratio <= 0.4:  # Poor agreement
-                confidence *= 0.8
-        
-        return min(0.95, max(0.05, confidence))
-    
-    def _update_market_conditions(self, symbol: str, market_data: dict):
-        """Update market conditions for the symbol"""
-        if symbol not in self.market_conditions:
-            self.market_conditions[symbol] = {}
-        
-        self.market_conditions[symbol].update(market_data)
-    
-    def _store_confidence_data(self, symbol: str, signals: dict, decision: str, confidence: float):
-        """Store confidence data for learning and improvement"""
-        if symbol not in self.confidence_history:
-            self.confidence_history[symbol] = []
-        
-        timestamp = datetime.now()
-        entry = {
-            'timestamp': timestamp,
-            'signals': signals,
-            'decision': decision,
-            'confidence': confidence,
-            'outcome': None  # Will be updated when trade result is known
-        }
-        
-        self.confidence_history[symbol].append(entry)
-        
-        # Keep only recent history (last 1000 entries)
-        if len(self.confidence_history[symbol]) > 1000:
-            self.confidence_history[symbol] = self.confidence_history[symbol][-1000:]
-    
-    def update_performance(self, symbol: str, confidence: float, outcome: float):
-        """Update performance metrics based on trade outcome"""
-        if symbol not in self.performance_metrics:
-            self.performance_metrics[symbol] = {
-                'total_trades': 0,
-                'successful_trades': 0,
-                'success_rate': 0.5,
-                'confidence_ranges': {}
-            }
-        
-        perf = self.performance_metrics[symbol]
-        perf['total_trades'] += 1
-        
-        if outcome > 0:  # Successful trade
-            perf['successful_trades'] += 1
-        
-        perf['success_rate'] = perf['successful_trades'] / perf['total_trades']
-        
-        # Update confidence range performance
-        conf_range = self._get_confidence_range(confidence)
-        if conf_range not in perf['confidence_ranges']:
-            perf['confidence_ranges'][conf_range] = {'total': 0, 'successful': 0}
-        
-        perf['confidence_ranges'][conf_range]['total'] += 1
-        if outcome > 0:
-            perf['confidence_ranges'][conf_range]['successful'] += 1
-    
-    def _get_confidence_range(self, confidence: float) -> str:
-        """Get confidence range category"""
-        if confidence < 0.3:
-            return 'low'
-        elif confidence < 0.6:
-            return 'medium'
-        else:
-            return 'high'
-    
-    def get_optimal_threshold(self, symbol: str, action: str) -> float:
-        """Get optimal threshold based on historical performance"""
-        if symbol not in self.performance_metrics:
-            return self.base_thresholds.get(action, 0.2)
-        
-        perf = self.performance_metrics[symbol]
-        success_rate = perf.get('success_rate', 0.5)
-        
-        # Adjust threshold based on success rate
-        base_threshold = self.base_thresholds.get(action, 0.2)
-        
-        if success_rate > 0.7:
-            return max(0.1, base_threshold * 0.8)  # Lower threshold for good performers
-        elif success_rate < 0.3:
-            return min(0.5, base_threshold * 1.5)  # Higher threshold for poor performers
-        else:
-            return base_threshold
-    
-    def _weighted_average_confidence(self, symbol: str, signals: dict) -> tuple:
-        """Simple weighted average fallback method"""
-        if not signals:
-            return 'HOLD', 0.5
-        
-        # Default implementation for fallback
-        total_confidence = 0.0
-        total_weight = 0.0
-        action_votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
-        
-        for source, data in signals.items():
-            if isinstance(data, dict):
-                action = data.get('action', 'HOLD')
-                confidence = data.get('confidence', 0.5)
-            elif isinstance(data, tuple) and len(data) >= 2:
-                action, confidence = data[0], data[1]
-            else:
-                continue
-            
-            weight = 0.25  # Equal weight
-            action_votes[action] += weight * confidence
-            total_weight += weight
-        
-        if total_weight == 0:
-            return 'HOLD', 0.5
-        
-        # Find best action
-        best_action = max(action_votes.items(), key=lambda x: x[1])
-        final_confidence = best_action[1] / total_weight if total_weight > 0 else 0.5
-        # Enhanced logging for confidence
-        conf_logger = get_trading_logger('ConfidenceManager')
-        log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
-        
-        return best_action[0], min(0.95, max(0.05, final_confidence))
-    
-    def _bayesian_confidence_fusion(self, symbol: str, signals: dict) -> tuple:
-        """Bayesian fusion method (placeholder for future implementation)"""
-        return self._weighted_average_confidence(symbol, signals)
-    
-    def _ensemble_voting_confidence(self, symbol: str, signals: dict) -> tuple:
-        """Ensemble voting method (placeholder for future implementation)"""
-        return self._weighted_average_confidence(symbol, signals)
-
 class RLPerformanceTracker:
     """Track RL Agent performance for adaptive learning"""
     
@@ -13323,21 +11191,21 @@ class RLPerformanceTracker:
     def get_adaptive_threshold(self, symbol):
         """Get adaptive confidence threshold based on performance"""
         if symbol not in self.symbol_performance:
-            return 0.25  # Much lower default threshold for more opportunities
+            return 0.52  # Default threshold
             
         perf = self.symbol_performance[symbol]
         if perf['total_actions'] < 10:
-            return 0.25  # Not enough data, use lower threshold
+            return 0.52  # Not enough data
             
         success_rate = perf['successful_actions'] / perf['total_actions']
         
-        # Adjust threshold based on success rate (more aggressive)
+        # Adjust threshold based on success rate
         if success_rate > 0.7:
-            return 0.42  # Lower threshold for high-performing symbols
+            return 0.48  # Lower threshold for high-performing symbols
         elif success_rate < 0.4:
-            return 0.52  # Higher threshold for low-performing symbols
+            return 0.58  # Higher threshold for low-performing symbols
         else:
-            return 0.47  # Reduced default threshold
+            return 0.52  # Default threshold
 
 class DynamicActionSpace:
     """Dynamiofction space based on market conditions"""
@@ -14209,13 +12077,6 @@ class TransferLearningManager:
             final_decision, final_confidence = self._apply_consensus_mechanism(
                 agent_opinions, agent_confidences, symbol
             )
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
             
             print(f" [Master Agent Coordinator] Final decision cho {symbol}: {final_decision} ({final_confidence:.2%})")
             
@@ -14270,13 +12131,6 @@ class TransferLearningManager:
             if weighted_votes:
                 best_decision = max(weighted_votes, key=weighted_votes.get)
                 final_confidence = weighted_votes[best_decision] / total_weight if total_weight > 0 else 0.5
-                # Enhanced logging for confidence
-                conf_logger = get_trading_logger('ConfidenceManager')
-                log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
                 return best_decision, min(final_confidence, 0.95)
             else:
                 return "HOLD", 0.5
@@ -14584,157 +12438,6 @@ class MasterAgent:
         
         print("✅ [Master Agent] Master Agent initialized successfully")
     
-    def coordinate_decision(self, task_type, market_data, symbol):
-        """Decision coordination for all specialist agents"""
-        print(f"[Master Agent Coordinator] Starting coordinate_decision for {symbol}")
-        logging.info(f"[Master Agent Coordinator] Starting coordinate_decision for {symbol}")
-        
-        try:
-            # Decompose task
-            subtasks = self.decompose_task(task_type, market_data)
-            print(f" [Master Agent Coordinator] Decomposed tasks: {list(subtasks.keys())}")
-            
-            # Collect opinions from specialist agents
-            agent_opinions = {}
-            agent_confidences = {}
-            
-            for subtask_name, data in subtasks.items():
-                # Map subtask names to agent names
-                agent_mapping = {
-                    'trend_analysis': 'trend_analyzer',
-                    'news_analysis': 'news_analyzer', 
-                    'risk_assessment': 'risk_manager',
-                    'sentiment_analysis': 'sentiment_analyzer',
-                    'volatility_prediction': 'volatility_predictor',
-                    'portfolio_optimization': 'portfolio_optimizer'
-                }
-                
-                agent_name = agent_mapping.get(subtask_name, subtask_name)
-                if agent_name in self.specialist_agents:
-                    print(f" [Master Agent Coordinator] Starting analysis with {agent_name}")
-                    agent = self.specialist_agents[agent_name]
-                    try:
-                        opinion, confidence = agent.analyze(data, symbol)
-                        agent_opinions[subtask_name] = opinion
-                        agent_confidences[subtask_name] = confidence
-                        print(f" [Master Agent Coordinator] {subtask_name}: {opinion} ({confidence:.2%})")
-                    except Exception as e:
-                        print(f"[Master Agent Coordinator] Error in {subtask_name}: {e}")
-                        agent_opinions[subtask_name] = "HOLD"
-                        agent_confidences[subtask_name] = 0.5
-            
-            # Apply consensus mechanism
-            final_decision, final_confidence = self._apply_consensus_mechanism(
-                agent_opinions, agent_confidences, symbol
-            )
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
-            
-            print(f" [Master Agent Coordinator] Final decision for {symbol}: {final_decision} ({final_confidence:.2%})")
-            
-            # Update agent performance
-            self._update_agent_performance(agent_opinions, agent_confidences, symbol)
-            
-            return final_decision, final_confidence
-            
-        except Exception as e:
-            print(f"[Master Agent Coordinator] Error in coordinate_decision: {e}")
-            logging.error(f"Error in Master Agent coordination: {e}")
-            return "HOLD", 0.5
-    
-    def decompose_task(self, task_type, market_data):
-        """Decompose task into subtasks for specialist agents"""
-        subtasks = {}
-        
-        if task_type == 'trading_decision':
-            subtasks['trend_analysis'] = market_data
-            subtasks['news_analysis'] = market_data
-            subtasks['risk_assessment'] = market_data
-            subtasks['sentiment_analysis'] = market_data
-            subtasks['volatility_prediction'] = market_data
-            subtasks['portfolio_optimization'] = market_data
-            
-        return subtasks
-    
-    def _apply_consensus_mechanism(self, opinions, confidences, symbol):
-        """Apply consensus mechanism to agent opinions"""
-        try:
-            # Weight votes by confidence
-            weighted_votes = {}
-            total_weight = 0.0
-            
-            for agent, opinion in opinions.items():
-                confidence = confidences.get(agent, 0.5)
-                if opinion not in weighted_votes:
-                    weighted_votes[opinion] = 0.0
-                weighted_votes[opinion] += confidence
-                total_weight += confidence
-            
-            # Find decision with highest weighted score
-            if weighted_votes:
-                best_decision = max(weighted_votes, key=weighted_votes.get)
-                final_confidence = weighted_votes[best_decision] / total_weight if total_weight > 0 else 0.5
-                # Enhanced logging for confidence
-                conf_logger = get_trading_logger('ConfidenceManager')
-                log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
-                return best_decision, min(final_confidence, 0.95)
-            else:
-                return "HOLD", 0.5
-                
-        except Exception as e:
-            print(f"[Master Agent Coordinator] Error in consensus mechanism: {e}")
-            return "HOLD", 0.5
-    
-    def _update_agent_performance(self, opinions, confidences, symbol):
-        """Update performance of agents"""
-        try:
-            if not hasattr(self, 'agent_performance'):
-                self.agent_performance = {}
-                
-            for agent_name in opinions.keys():
-                if agent_name not in self.agent_performance:
-                    self.agent_performance[agent_name] = {}
-                if symbol not in self.agent_performance[agent_name]:
-                    self.agent_performance[agent_name][symbol] = 0.5
-                    
-        except Exception as e:
-            print(f"[Master Agent Coordinator] Error updating agent performance: {e}")
-        
-    def _setup_communication_matrix(self):
-        """Setup communication matrix between agents"""
-        agents = list(self.specialist_agents.keys())
-        self.communication_matrix = {}
-        
-        for agent1 in agents:
-            self.communication_matrix[agent1] = {}
-            for agent2 in agents:
-                if agent1 != agent2:
-                    # Define communication strength based on agent types
-                    comm_strength = self._calculate_communication_strength(agent1, agent2)
-                    self.communication_matrix[agent1][agent2] = comm_strength
-                else:
-                    self.communication_matrix[agent1][agent2] = 1.0
-    
-    def _calculate_communication_strength(self, agent1, agent2):
-        """Calculate communication strength between two agents"""
-        # Define which agents should communicate more strongly
-        communication_pairs = [
-            ('trend_analyzer', 'risk_manager'),
-            ('news_analyzer', 'trend_analyzer'),
-            ('sentiment_analyzer', 'portfolio_optimizer')
-        ]
-        
-        return (agent1, agent2) in communication_pairs or (agent2, agent1) in communication_pairs
-    
     def initialize_specialist_agents(self):
         """Initialize all specialist agents"""
         print("🎯 [Master Agent] Starting specialist agents initialization...")
@@ -14832,72 +12535,6 @@ class MasterAgent:
             print(f"❌ [Master Agent] Error in TP/SL decision for {symbol}: {e}")
             return self._get_fallback_tp_sl_levels(entry_price, direction)
     
-    def decide_trade_entry(self, symbol, market_data, base_signal, base_confidence):
-        """
-        The final entry decision method, synthesizing multiple sources.
-        Returns a dictionary with the decision and justification.
-        """
-        print(f"🎯 [Master Agent] Analyzing ENTRY for {base_signal} {symbol} (Confidence: {base_confidence:.2%})")
-        
-        agent_opinions = {}
-        agent_confidences = {}
-        
-        # Run specialist agents
-        for agent_name, agent in self.specialist_agents.items():
-            try:
-                opinion, confidence = agent.analyze(market_data['price_data'], symbol)
-                agent_opinions[agent_name] = opinion
-                agent_confidences[agent_name] = confidence
-            except Exception as e:
-                print(f"❌ Error running {agent_name}: {e}")
-                agent_opinions[agent_name] = "HOLD"
-                agent_confidences[agent_name] = 0.5
-                
-        # Synthesize opinions
-        buy_votes = sum(conf for agent, op in agent_opinions.items() if op == "BUY" for conf in [agent_confidences[agent]])
-        sell_votes = sum(conf for agent, op in agent_opinions.items() if op == "SELL" for conf in [agent_confidences[agent]])
-
-        # Analyze market structure - need to access bot instance for this
-        # We'll pass this as part of market_data or calculate it here
-        pa_score = 0.0
-        if 'pa_score' in market_data:
-            pa_score = market_data['pa_score']
-        
-        # Final decision logic
-        final_decision = "HOLD"
-        justification = []
-
-        if base_signal == "BUY":
-            if buy_votes > sell_votes * 1.5 and pa_score > 0.1:
-                final_decision = "APPROVE"
-                justification.append(f"Strong consensus from specialist agents (Buy Score: {buy_votes:.2f}).")
-                justification.append(f"Favorable Price Action (Score: {pa_score:.2f}).")
-            else:
-                final_decision = "REJECT"
-                justification.append(f"Weak consensus (Buy Score: {buy_votes:.2f} vs Sell Score: {sell_votes:.2f}).")
-                if pa_score <= 0.1:
-                    justification.append(f"Unfavorable Price Action (Score: {pa_score:.2f}).")
-
-        elif base_signal == "SELL":
-            if sell_votes > buy_votes * 1.5 and pa_score < -0.1:
-                final_decision = "APPROVE"
-                justification.append(f"Strong consensus from specialist agents (Sell Score: {sell_votes:.2f}).")
-                justification.append(f"Favorable Price Action (Score: {pa_score:.2f}).")
-            else:
-                final_decision = "REJECT"
-                justification.append(f"Weak consensus (Sell Score: {sell_votes:.2f} vs Buy Score: {buy_votes:.2f}).")
-                if pa_score >= -0.1:
-                    justification.append(f"Unfavorable Price Action (Score: {pa_score:.2f}).")
-
-        print(f"✅ [Master Agent] Decision: {final_decision}")
-        print(f"📝 [Master Agent] Justification: {' '.join(justification)}")
-        
-        return {
-            "decision": final_decision,
-            "justification": " ".join(justification),
-            "confidence": base_confidence
-        }
-
     def decide_trailing_stop_activation(self, symbol, current_price, entry_price, direction, market_data):
         """
         Intelligent decision on when to activate trailing stops
@@ -15528,103 +13165,54 @@ class MasterAgent:
             }
     
     def _calculate_optimal_trailing_distance(self, symbol, current_price, market_intelligence, profit_pct):
-        """Enhanced trailing stop distance calculation using symbol-specific configuration and market intelligence"""
+        """Calculate optimal trailing stop distance based on market conditions"""
         try:
-            # Get symbol-specific configuration
-            symbol_config = ENTRY_TP_SL_CONFIG.get(symbol, {})
-            
-            # Get technical analysis data
             technical = market_intelligence.get('technical', {})
             atr_pct = technical.get('atr_pct', 0.01)
             volatility_level = self._assess_volatility_level(market_intelligence)
             
-            # Use symbol-specific ATR multiplier for trailing
-            trailing_atr_multiplier = symbol_config.get('trailing_atr_multiplier', 2.0)
-            base_distance_pct = atr_pct * trailing_atr_multiplier
+            # Base distance as percentage of current price
+            base_distance_pct = atr_pct * 2  # 2x ATR as base
             
-            print(f"🎯 [Master Agent] Enhanced trailing distance calculation for {symbol}:")
-            print(f"   Symbol ATR multiplier: {trailing_atr_multiplier}")
-            print(f"   Base ATR: {atr_pct:.4%}")
-            print(f"   Base distance: {base_distance_pct:.4%}")
-            
-            # Enhanced volatility adjustment based on symbol configuration
-            volatility_threshold = symbol_config.get('trailing_volatility_threshold', 0.6)
-            if volatility_level > volatility_threshold:
-                if symbol.startswith(('BTC', 'ETH')):  # Crypto - more aggressive
-                    volatility_multiplier = 1.8
-                elif 'USD' in symbol and len(symbol) == 6:  # Forex
-                    volatility_multiplier = 1.3
-                else:  # Commodities/Indices
-                    volatility_multiplier = 1.5
-            elif volatility_level > (volatility_threshold * 0.7):
+            # Adjust based on volatility
+            if volatility_level > 0.8:
+                volatility_multiplier = 1.5  # Wider trailing for high volatility
+            elif volatility_level > 0.5:
                 volatility_multiplier = 1.2
             else:
                 volatility_multiplier = 1.0
             
-            print(f"   Volatility level: {volatility_level:.2f} (threshold: {volatility_threshold:.2f})")
-            print(f"   Volatility multiplier: {volatility_multiplier:.2f}")
-            
-            # Dynamic profit-based adjustment
-            if profit_pct > 0.08:  # >8% profit - very tight trailing
-                profit_multiplier = 0.7
-            elif profit_pct > 0.05:  # >5% profit - tight trailing
-                profit_multiplier = 0.8
-            elif profit_pct > 0.03:  # >3% profit - moderate trailing
+            # Adjust based on profit level
+            if profit_pct > 0.05:  # >5% profit
+                profit_multiplier = 0.8  # Tighter trailing for large profits
+            elif profit_pct > 0.03:  # >3% profit
                 profit_multiplier = 0.9
-            elif profit_pct > 0.02:  # >2% profit - standard trailing
+            else:
                 profit_multiplier = 1.0
-            else:  # <2% profit - wider trailing for safety
-                profit_multiplier = 1.1
             
-            print(f"   Current profit: {profit_pct:.2%}")
-            print(f"   Profit multiplier: {profit_multiplier:.2f}")
-            
-            # Market condition adjustment
-            trend_strength = self._assess_trend_strength(market_intelligence)
-            if trend_strength > 0.8:  # Very strong trend - can use tighter trailing
-                trend_multiplier = 0.9
-            elif trend_strength > 0.6:  # Strong trend
-                trend_multiplier = 1.0
-            else:  # Weak trend - wider trailing for safety
-                trend_multiplier = 1.2
-            
-            print(f"   Trend strength: {trend_strength:.2f}")
-            print(f"   Trend multiplier: {trend_multiplier:.2f}")
-            
-            # Calculate final distance with all multipliers
-            final_distance_pct = base_distance_pct * volatility_multiplier * profit_multiplier * trend_multiplier
-            
-            # Symbol-specific bounds
-            if symbol.startswith(('BTC', 'ETH')):  # Crypto - wider bounds
-                min_distance_pct = 0.008  # 0.8% minimum
-                max_distance_pct = 0.05   # 5% maximum
-            elif 'USD' in symbol and len(symbol) == 6:  # Forex - tighter bounds
-                min_distance_pct = 0.003  # 0.3% minimum
-                max_distance_pct = 0.02   # 2% maximum
-            else:  # Commodities/Indices - standard bounds
-                min_distance_pct = 0.005  # 0.5% minimum
-                max_distance_pct = 0.03   # 3% maximum
+            # Calculate final distance
+            final_distance_pct = base_distance_pct * volatility_multiplier * profit_multiplier
             
             # Apply bounds
+            min_distance_pct = 0.005  # 0.5% minimum
+            max_distance_pct = 0.03   # 3% maximum
+            
             final_distance_pct = max(min_distance_pct, min(final_distance_pct, max_distance_pct))
             
             # Convert to price distance
             trailing_distance = current_price * final_distance_pct
             
-            print(f"   Final calculation:")
-            print(f"   - Combined multipliers: {volatility_multiplier * profit_multiplier * trend_multiplier:.2f}")
-            print(f"   - Final distance %: {final_distance_pct:.4%}")
-            print(f"   - Trailing distance: {trailing_distance:.5f}")
-            print(f"   - Bounds: {min_distance_pct:.3%} - {max_distance_pct:.3%}")
+            print(f"🎯 [Master Agent] Trailing distance calculation:")
+            print(f"   Base (2xATR): {base_distance_pct:.3%}")
+            print(f"   Volatility multiplier: {volatility_multiplier:.2f}")
+            print(f"   Profit multiplier: {profit_multiplier:.2f}")
+            print(f"   Final distance: {final_distance_pct:.3%} ({trailing_distance:.5f})")
             
             return trailing_distance
             
         except Exception as e:
-            print(f"❌ [Master Agent] Error calculating enhanced trailing distance for {symbol}: {e}")
-            # Fallback with symbol-specific default
-            symbol_config = ENTRY_TP_SL_CONFIG.get(symbol, {})
-            fallback_multiplier = symbol_config.get('trailing_atr_multiplier', 2.0)
-            return current_price * (fallback_multiplier * 0.005)  # Conservative fallback
+            print(f"❌ [Master Agent] Error calculating trailing distance: {e}")
+            return current_price * 0.01  # 1% fallback
     
     # === PERFORMANCE TRACKING AND LEARNING ===
     
@@ -15839,918 +13427,6 @@ class MasterAgent:
             print(f"❌ [Master Agent] Error generating performance summary: {e}")
             return {"error": str(e)}
 
-    async def monitor_and_manage_emergency_stops(self, open_positions, data_manager):
-        """
-        1. Emergency Stoploss Management
-        Centralized emergency stop loss monitoring and management
-        """
-        if not open_positions:
-            return
-            
-        print("🚨 [Master Agent - Emergency SL] Monitoring all positions for emergency conditions...")
-        
-        emergency_actions = []
-        
-        for symbol, position in list(open_positions.items()):
-            try:
-                # Get real-time price
-                current_price = data_manager.get_current_price(symbol)
-                if current_price is None:
-                    continue
-                
-                # Calculate distance to SL
-                if position["signal"] == "BUY":
-                    distance_to_sl = current_price - position["sl"]
-                    sl_percentage = (distance_to_sl / position["entry_price"]) * 100
-                else:  # SELL
-                    distance_to_sl = position["sl"] - current_price
-                    sl_percentage = (distance_to_sl / position["entry_price"]) * 100
-                
-                # Emergency condition: distance to SL < 0.5%
-                if sl_percentage < 0.5:
-                    print(f"⚠️ [Master Agent - Emergency SL] {symbol}: Critical risk! {sl_percentage:.2f}% to SL")
-                    
-                    # Enhanced emergency analysis using specialist agents
-                    emergency_reason = await self._analyze_enhanced_emergency_stop_reason(
-                        symbol, position, current_price, position["signal"], data_manager
-                    )
-                    
-                    # Check if SL should be triggered
-                    should_close, close_reason = self._evaluate_emergency_close_decision(
-                        symbol, position, current_price
-                    )
-                    
-                    if should_close:
-                        emergency_actions.append({
-                            'symbol': symbol,
-                            'action': 'EMERGENCY_CLOSE',
-                            'reason': f"Emergency Stop Loss: {emergency_reason}",
-                            'current_price': current_price,
-                            'analysis': close_reason
-                        })
-                        
-                        # Send intelligent alert
-                        await self._send_emergency_alert(symbol, position, emergency_reason, current_price)
-                        
-            except Exception as e:
-                print(f"❌ [Master Agent - Emergency SL] Error monitoring {symbol}: {e}")
-                continue
-        
-        return emergency_actions
-    
-    async def _analyze_enhanced_emergency_stop_reason(self, symbol, position, current_price, signal_direction, data_manager):
-        """Enhanced emergency stop analysis using specialist agents"""
-        try:
-            print(f"🔍 [Master Agent - Emergency Analysis] Analyzing {symbol} with specialist agents")
-            
-            reasons = []
-            specialist_insights = {}
-            
-            # Get market data for analysis
-            try:
-                multi_tf_data = data_manager.fetch_multi_timeframe_data(symbol, count=50)
-                if multi_tf_data:
-                    from config import PRIMARY_TIMEFRAME_BY_SYMBOL, PRIMARY_TIMEFRAME
-                    primary_tf = PRIMARY_TIMEFRAME_BY_SYMBOL.get(symbol, PRIMARY_TIMEFRAME)
-                    market_data = multi_tf_data.get(primary_tf)
-                    
-                    if market_data is not None and len(market_data) > 10:
-                        # Consult specialist agents for emergency analysis
-                        for agent_name, agent in self.specialist_agents.items():
-                            try:
-                                opinion, confidence = agent.analyze(market_data, symbol)
-                                specialist_insights[agent_name] = {
-                                    'opinion': opinion,
-                                    'confidence': confidence
-                                }
-                            except Exception as e:
-                                specialist_insights[agent_name] = {
-                                    'opinion': 'HOLD',
-                                    'confidence': 0.5,
-                                    'error': str(e)
-                                }
-            except Exception as e:
-                print(f"⚠️ [Master Agent - Emergency Analysis] Data fetch error: {e}")
-            
-            # Calculate loss metrics
-            entry_price = position["entry_price"]
-            if signal_direction == "BUY":
-                loss_amount = entry_price - current_price
-                loss_pct = (loss_amount / entry_price) * 100
-            else:  # SELL
-                loss_amount = current_price - entry_price
-                loss_pct = (loss_amount / entry_price) * 100
-            
-            reasons.append(f"Loss: {loss_pct:.2f}%")
-            
-            # Analyze specialist agent consensus
-            opposing_votes = 0
-            supporting_votes = 0
-            
-            for agent_name, insight in specialist_insights.items():
-                if insight['opinion'] != signal_direction and insight['opinion'] != 'HOLD':
-                    opposing_votes += insight['confidence']
-                elif insight['opinion'] == signal_direction:
-                    supporting_votes += insight['confidence']
-            
-            if opposing_votes > supporting_votes * 1.5:
-                reasons.append(f"Strong opposing consensus from specialists ({opposing_votes:.2f} vs {supporting_votes:.2f})")
-            
-            # Volatility analysis from VolatilityPredictionAgent
-            if 'volatility_predictor' in specialist_insights:
-                vol_insight = specialist_insights['volatility_predictor']
-                if vol_insight['confidence'] > 0.7:
-                    reasons.append(f"High volatility warning (confidence: {vol_insight['confidence']:.2f})")
-            
-            # News sentiment from NewsAnalysisAgent
-            if 'news_analyzer' in specialist_insights:
-                news_insight = specialist_insights['news_analyzer']
-                if news_insight['opinion'] != signal_direction and news_insight['confidence'] > 0.6:
-                    reasons.append(f"Negative news sentiment detected")
-            
-            # Time analysis
-            from datetime import datetime
-            entry_time = position.get("timestamp", datetime.now())
-            if isinstance(entry_time, str):
-                try:
-                    entry_time = datetime.fromisoformat(entry_time.replace('Z', '+00:00'))
-                except:
-                    entry_time = datetime.now()
-            
-            time_held = datetime.now() - entry_time
-            hours_held = time_held.total_seconds() / 3600
-            
-            if hours_held < 1:
-                reasons.append(f"Quick failure (<1h held)")
-            elif hours_held > 168:  # 7 days
-                reasons.append(f"Extended hold ({hours_held/24:.1f} days)")
-            
-            comprehensive_reason = " | ".join(reasons) if reasons else "Standard emergency stop"
-            
-            # Store emergency analysis
-            if not hasattr(self, 'emergency_analysis_history'):
-                self.emergency_analysis_history = []
-            
-            self.emergency_analysis_history.append({
-                'timestamp': datetime.now(),
-                'symbol': symbol,
-                'reason': comprehensive_reason,
-                'specialist_insights': specialist_insights,
-                'loss_pct': loss_pct,
-                'hours_held': hours_held
-            })
-            
-            return comprehensive_reason
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Emergency Analysis] Error: {e}")
-            return f"Analysis error: {str(e)[:50]}"
-    
-    def _evaluate_emergency_close_decision(self, symbol, position, current_price):
-        """Evaluate whether to close position immediately"""
-        try:
-            # Check if SL is actually hit
-            if position["signal"] == "BUY":
-                sl_hit = current_price <= position["sl"]
-            else:  # SELL
-                sl_hit = current_price >= position["sl"]
-            
-            if sl_hit:
-                return True, "Stop loss level breached"
-            
-            # Additional risk checks
-            entry_price = position["entry_price"]
-            if position["signal"] == "BUY":
-                loss_pct = ((entry_price - current_price) / entry_price) * 100
-            else:
-                loss_pct = ((current_price - entry_price) / entry_price) * 100
-            
-            # Emergency close if loss exceeds 5%
-            if loss_pct > 5.0:
-                return True, f"Excessive loss: {loss_pct:.2f}%"
-            
-            return False, "Within acceptable risk parameters"
-            
-        except Exception as e:
-            return True, f"Error in evaluation: {e}"
-    
-    async def _send_emergency_alert(self, symbol, position, reason, current_price):
-        """Send intelligent emergency alert"""
-        try:
-            from datetime import datetime
-            
-            alert_message = f"""
-🚨 **EMERGENCY STOP LOSS TRIGGERED** 🚨
-
-**Symbol:** {symbol}
-**Signal:** {position['signal']}
-**Entry Price:** {position['entry_price']:.6f}
-**Current Price:** {current_price:.6f}
-**Stop Loss:** {position['sl']:.6f}
-
-**Emergency Analysis:**
-{reason}
-
-**Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-⚠️ Position will be closed immediately for risk management.
-            """
-            
-            print(alert_message)
-            # Here you would integrate with Discord/Telegram API
-            # await send_discord_alert(alert_message)
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Alert] Error sending emergency alert: {e}")
-    
-    def select_active_strategy(self, symbol, market_data):
-        """
-        2. Dynamic Strategy Selection
-        Intelligently select between trending and ranging strategies
-        """
-        try:
-            print(f"📊 [Master Agent - Strategy Selection] Analyzing market regime for {symbol}")
-            
-            # Consult specialist agents
-            trend_analysis = None
-            volatility_analysis = None
-            
-            if 'trend_analyzer' in self.specialist_agents:
-                try:
-                    trend_opinion, trend_confidence = self.specialist_agents['trend_analyzer'].analyze(market_data, symbol)
-                    trend_analysis = {'opinion': trend_opinion, 'confidence': trend_confidence}
-                except Exception as e:
-                    print(f"⚠️ [Strategy Selection] Trend analysis error: {e}")
-            
-            if 'volatility_predictor' in self.specialist_agents:
-                try:
-                    vol_opinion, vol_confidence = self.specialist_agents['volatility_predictor'].analyze(market_data, symbol)
-                    volatility_analysis = {'opinion': vol_opinion, 'confidence': vol_confidence}
-                except Exception as e:
-                    print(f"⚠️ [Strategy Selection] Volatility analysis error: {e}")
-            
-            # Strategy selection logic
-            strategy = 'ranging'  # Default
-            reasoning = []
-            
-            # Check for strong trend signals
-            if trend_analysis and trend_analysis['confidence'] > 0.7:
-                if trend_analysis['opinion'] in ['BUY', 'SELL']:
-                    strategy = 'trending'
-                    reasoning.append(f"Strong trend signal detected ({trend_analysis['opinion']}, confidence: {trend_analysis['confidence']:.2%})")
-            
-            # Check volatility regime
-            if volatility_analysis and volatility_analysis['confidence'] > 0.6:
-                if volatility_analysis['opinion'] != 'HOLD':
-                    if strategy == 'trending':
-                        reasoning.append(f"Volatility supports trending strategy")
-                    else:
-                        # High volatility might favor ranging in some cases
-                        reasoning.append(f"Moderate volatility detected")
-            
-            # Market structure analysis
-            try:
-                if len(market_data) >= 50:
-                    # Calculate trend strength using multiple timeframes
-                    sma_20 = market_data['close'].rolling(20).mean()
-                    sma_50 = market_data['close'].rolling(50).mean()
-                    
-                    current_price = market_data['close'].iloc[-1]
-                    sma_20_current = sma_20.iloc[-1]
-                    sma_50_current = sma_50.iloc[-1]
-                    
-                    # Strong trend if price is clearly above/below both SMAs
-                    if current_price > sma_20_current > sma_50_current:
-                        strategy = 'trending'
-                        reasoning.append("Clear uptrend structure (Price > SMA20 > SMA50)")
-                    elif current_price < sma_20_current < sma_50_current:
-                        strategy = 'trending'
-                        reasoning.append("Clear downtrend structure (Price < SMA20 < SMA50)")
-                    else:
-                        strategy = 'ranging'
-                        reasoning.append("Sideways/consolidation structure detected")
-            except Exception as e:
-                reasoning.append("Technical analysis unavailable")
-            
-            final_reasoning = " | ".join(reasoning) if reasoning else "Default ranging strategy"
-            
-            print(f"✅ [Master Agent - Strategy Selection] {symbol}: {strategy.upper()} strategy selected")
-            print(f"📝 [Master Agent - Strategy Selection] Reasoning: {final_reasoning}")
-            
-            # Store decision for learning
-            if not hasattr(self, 'strategy_selection_history'):
-                self.strategy_selection_history = []
-            
-            from datetime import datetime
-            self.strategy_selection_history.append({
-                'timestamp': datetime.now(),
-                'symbol': symbol,
-                'strategy': strategy,
-                'reasoning': final_reasoning,
-                'trend_analysis': trend_analysis,
-                'volatility_analysis': volatility_analysis
-            })
-            
-            return strategy
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Strategy Selection] Error for {symbol}: {e}")
-            return 'ranging'  # Safe default
-    
-    def get_dynamic_risk_multiplier(self):
-        """
-        3. Dynamic Risk Appetite Adjustment
-        Adjust risk levels based on market conditions and news
-        """
-        try:
-            print("🎯 [Master Agent - Risk Multiplier] Calculating dynamic risk adjustment...")
-            
-            risk_factors = []
-            base_multiplier = 1.0
-            
-            # News sentiment analysis
-            news_risk_adjustment = 0.0
-            if 'news_analyzer' in self.specialist_agents:
-                try:
-                    # Simulate news sentiment check (in real implementation, check recent news)
-                    import random
-                    news_sentiment_score = random.uniform(-0.5, 0.5)  # -0.5 (very negative) to 0.5 (very positive)
-                    
-                    if news_sentiment_score < -0.3:
-                        news_risk_adjustment = -0.3  # Reduce risk
-                        risk_factors.append(f"Negative news sentiment ({news_sentiment_score:.2f})")
-                    elif news_sentiment_score > 0.3:
-                        news_risk_adjustment = 0.2  # Slightly increase risk
-                        risk_factors.append(f"Positive news sentiment ({news_sentiment_score:.2f})")
-                except Exception as e:
-                    risk_factors.append("News analysis unavailable")
-            
-            # Market volatility assessment
-            volatility_risk_adjustment = 0.0
-            if 'volatility_predictor' in self.specialist_agents:
-                try:
-                    # Check general market volatility (simulate VIX-like indicator)
-                    market_volatility = random.uniform(0.1, 0.9)  # 0.1 (low) to 0.9 (high)
-                    
-                    if market_volatility > 0.7:  # High volatility
-                        volatility_risk_adjustment = -0.4  # Significantly reduce risk
-                        risk_factors.append(f"High market volatility ({market_volatility:.2f})")
-                    elif market_volatility < 0.3:  # Low volatility
-                        volatility_risk_adjustment = 0.1  # Slightly increase risk
-                        risk_factors.append(f"Low market volatility ({market_volatility:.2f})")
-                    else:
-                        risk_factors.append(f"Normal market volatility ({market_volatility:.2f})")
-                except Exception as e:
-                    risk_factors.append("Volatility analysis unavailable")
-            
-            # Portfolio performance check
-            performance_risk_adjustment = 0.0
-            try:
-                # Check recent emergency stops
-                if hasattr(self, 'emergency_analysis_history') and self.emergency_analysis_history:
-                    from datetime import datetime, timedelta
-                    recent_emergencies = [
-                        e for e in self.emergency_analysis_history 
-                        if e['timestamp'] > datetime.now() - timedelta(days=7)
-                    ]
-                    
-                    if len(recent_emergencies) > 3:
-                        performance_risk_adjustment = -0.2  # Reduce risk after multiple stops
-                        risk_factors.append(f"Multiple recent emergency stops ({len(recent_emergencies)})")
-                    elif len(recent_emergencies) == 0:
-                        performance_risk_adjustment = 0.1  # Increase risk if no recent issues
-                        risk_factors.append("No recent emergency stops")
-            except Exception as e:
-                risk_factors.append("Performance history unavailable")
-            
-            # Economic calendar check (simplified)
-            calendar_risk_adjustment = 0.0
-            try:
-                from datetime import datetime
-                current_hour = datetime.now().hour
-                current_weekday = datetime.now().weekday()
-                
-                # Reduce risk during high-impact news hours (simplified)
-                if current_hour in [8, 9, 13, 14, 15]:  # Major economic releases
-                    calendar_risk_adjustment = -0.15
-                    risk_factors.append("High-impact news hours")
-                elif current_weekday == 4 and current_hour >= 15:  # Friday afternoon
-                    calendar_risk_adjustment = -0.1
-                    risk_factors.append("Weekend risk approach")
-            except Exception as e:
-                risk_factors.append("Calendar analysis unavailable")
-            
-            # Calculate final multiplier
-            total_adjustment = news_risk_adjustment + volatility_risk_adjustment + performance_risk_adjustment + calendar_risk_adjustment
-            final_multiplier = max(0.3, min(1.5, base_multiplier + total_adjustment))  # Clamp between 0.3 and 1.5
-            
-            # Determine risk level description
-            if final_multiplier < 0.6:
-                risk_level = "VERY_LOW"
-            elif final_multiplier < 0.8:
-                risk_level = "LOW"
-            elif final_multiplier < 1.1:
-                risk_level = "NORMAL"
-            elif final_multiplier < 1.3:
-                risk_level = "HIGH"
-            else:
-                risk_level = "VERY_HIGH"
-            
-            print(f"📊 [Master Agent - Risk Multiplier] Risk Level: {risk_level}")
-            print(f"📊 [Master Agent - Risk Multiplier] Multiplier: {final_multiplier:.2f}")
-            if risk_factors:
-                print(f"📝 [Master Agent - Risk Multiplier] Factors: {' | '.join(risk_factors)}")
-            
-            # Store risk decision
-            if not hasattr(self, 'risk_multiplier_history'):
-                self.risk_multiplier_history = []
-            
-            self.risk_multiplier_history.append({
-                'timestamp': datetime.now(),
-                'multiplier': final_multiplier,
-                'risk_level': risk_level,
-                'factors': risk_factors,
-                'adjustments': {
-                    'news': news_risk_adjustment,
-                    'volatility': volatility_risk_adjustment,
-                    'performance': performance_risk_adjustment,
-                    'calendar': calendar_risk_adjustment
-                }
-            })
-            
-            return final_multiplier
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Risk Multiplier] Error: {e}")
-            return 1.0  # Safe default
-    
-    def request_retrain_check(self, symbol):
-        """
-        4. Auto-Retrain Coordination
-        Analyze performance and request model retraining when needed
-        """
-        try:
-            from datetime import datetime, timedelta
-            print(f"🔄 [Master Agent - Retrain Check] Analyzing retraining needs for {symbol}")
-            
-            retrain_signals = []
-            retrain_score = 0.0
-            
-            # Check specialist agent consistency
-            if hasattr(self, 'strategy_selection_history') and self.strategy_selection_history:
-                recent_decisions = [
-                    d for d in self.strategy_selection_history 
-                    if d['symbol'] == symbol and d['timestamp'] > datetime.now() - timedelta(days=7)
-                ]
-                
-                if len(recent_decisions) >= 5:
-                    # Check for inconsistent strategy selections
-                    trending_count = sum(1 for d in recent_decisions if d['strategy'] == 'trending')
-                    ranging_count = len(recent_decisions) - trending_count
-                    
-                    inconsistency_ratio = min(trending_count, ranging_count) / len(recent_decisions)
-                    if inconsistency_ratio > 0.4:  # High inconsistency
-                        retrain_score += 0.3
-                        retrain_signals.append(f"High strategy inconsistency ({inconsistency_ratio:.2%})")
-            
-            # Check emergency stop frequency
-            if hasattr(self, 'emergency_analysis_history') and self.emergency_analysis_history:
-                recent_emergencies = [
-                    e for e in self.emergency_analysis_history 
-                    if e['symbol'] == symbol and e['timestamp'] > datetime.now() - timedelta(days=14)
-                ]
-                
-                if len(recent_emergencies) > 2:
-                    retrain_score += 0.4
-                    retrain_signals.append(f"Frequent emergency stops ({len(recent_emergencies)} in 14 days)")
-            
-            # Check specialist agent disagreement
-            disagreement_score = 0.0
-            if hasattr(self, 'agent_performance') and symbol in self.agent_performance:
-                # Simulate agent disagreement analysis
-                import random
-                disagreement_score = random.uniform(0.0, 1.0)
-                
-                if disagreement_score > 0.7:
-                    retrain_score += 0.2
-                    retrain_signals.append(f"High specialist agent disagreement ({disagreement_score:.2%})")
-            
-            # Market regime change detection
-            try:
-                # Check if market conditions have significantly changed
-                regime_change_score = random.uniform(0.0, 1.0)  # Simulate regime change detection
-                
-                if regime_change_score > 0.8:
-                    retrain_score += 0.3
-                    retrain_signals.append(f"Significant market regime change detected")
-            except Exception as e:
-                retrain_signals.append("Market regime analysis unavailable")
-            
-            # Performance degradation check
-            try:
-                # This would analyze actual trading performance
-                performance_degradation = random.uniform(0.0, 1.0)
-                
-                if performance_degradation > 0.6:
-                    retrain_score += 0.25
-                    retrain_signals.append(f"Performance degradation detected")
-            except Exception as e:
-                retrain_signals.append("Performance analysis unavailable")
-            
-            # Decision threshold
-            retrain_threshold = 0.6
-            should_retrain = retrain_score >= retrain_threshold
-            
-            print(f"📊 [Master Agent - Retrain Check] {symbol}: Score {retrain_score:.2f} (Threshold: {retrain_threshold})")
-            print(f"🎯 [Master Agent - Retrain Check] Decision: {'RETRAIN RECOMMENDED' if should_retrain else 'NO RETRAIN NEEDED'}")
-            
-            if retrain_signals:
-                print(f"📝 [Master Agent - Retrain Check] Signals: {' | '.join(retrain_signals)}")
-            
-            # Store retrain analysis
-            if not hasattr(self, 'retrain_analysis_history'):
-                self.retrain_analysis_history = []
-            
-            self.retrain_analysis_history.append({
-                'timestamp': datetime.now(),
-                'symbol': symbol,
-                'retrain_score': retrain_score,
-                'should_retrain': should_retrain,
-                'signals': retrain_signals
-            })
-            
-            # If retraining is recommended, trigger the process
-            if should_retrain:
-                return self._trigger_retrain_process(symbol, retrain_signals)
-            
-            return {
-                'retrain_needed': False,
-                'score': retrain_score,
-                'signals': retrain_signals
-            }
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Retrain Check] Error for {symbol}: {e}")
-            return {'retrain_needed': False, 'error': str(e)}
-    
-    def _trigger_retrain_process(self, symbol, signals):
-        """Trigger the actual retraining process"""
-        try:
-            print(f"🔄 [Master Agent - Retrain Trigger] Initiating retrain for {symbol}")
-            
-            # This would integrate with AutoRetrainManager
-            # For now, we'll just log the recommendation
-            retrain_recommendation = {
-                'retrain_needed': True,
-                'symbol': symbol,
-                'priority': 'HIGH' if len(signals) > 3 else 'MEDIUM',
-                'signals': signals,
-                'recommended_action': 'Full model retrain with recent data'
-            }
-            
-            print(f"📋 [Master Agent - Retrain Trigger] Recommendation: {retrain_recommendation}")
-            
-            return retrain_recommendation
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Retrain Trigger] Error: {e}")
-            return {'retrain_needed': False, 'error': str(e)}
-    
-    def get_hedging_recommendation(self, primary_trade_symbol, primary_trade_signal):
-        """
-        5. Portfolio Hedging Management
-        Recommend hedging positions to reduce portfolio risk
-        """
-        try:
-            print(f"🛡️ [Master Agent - Hedging] Analyzing hedging for {primary_trade_symbol} {primary_trade_signal}")
-            
-            # Correlation matrix (simplified - in real implementation, calculate from historical data)
-            correlation_matrix = {
-                'BTCUSD': {'ETHUSD': 0.85, 'XAUUSD': -0.2, 'SPX500': 0.6, 'EURUSD': 0.1},
-                'ETHUSD': {'BTCUSD': 0.85, 'XAUUSD': -0.15, 'SPX500': 0.55, 'EURUSD': 0.05},
-                'XAUUSD': {'BTCUSD': -0.2, 'ETHUSD': -0.15, 'SPX500': -0.3, 'EURUSD': 0.1},
-                'SPX500': {'BTCUSD': 0.6, 'ETHUSD': 0.55, 'XAUUSD': -0.3, 'EURUSD': -0.1},
-                'EURUSD': {'BTCUSD': 0.1, 'ETHUSD': 0.05, 'XAUUSD': 0.1, 'SPX500': -0.1}
-            }
-            
-            hedging_candidates = []
-            
-            if primary_trade_symbol in correlation_matrix:
-                correlations = correlation_matrix[primary_trade_symbol]
-                
-                # Look for negatively correlated assets
-                for symbol, correlation in correlations.items():
-                    if correlation < -0.15:  # Strong negative correlation
-                        hedge_signal = 'BUY' if primary_trade_signal == 'SELL' else 'SELL'
-                        hedge_strength = abs(correlation)
-                        
-                        hedging_candidates.append({
-                            'symbol': symbol,
-                            'signal': hedge_signal,
-                            'correlation': correlation,
-                            'hedge_strength': hedge_strength,
-                            'size_percent': min(0.3, hedge_strength * 0.5)  # Max 30% hedge size
-                        })
-            
-            # Risk assessment for hedging
-            current_risk_multiplier = self.get_dynamic_risk_multiplier()
-            
-            # Adjust hedge size based on current risk level
-            for candidate in hedging_candidates:
-                candidate['size_percent'] *= current_risk_multiplier
-                candidate['size_percent'] = max(0.05, min(0.25, candidate['size_percent']))  # Clamp between 5% and 25%
-            
-            # Select best hedging candidate
-            if hedging_candidates:
-                best_hedge = max(hedging_candidates, key=lambda x: x['hedge_strength'])
-                
-                # Consult specialist agents about the hedge
-                hedge_validation = self._validate_hedge_with_specialists(best_hedge)
-                
-                if hedge_validation['approved']:
-                    recommendation = {
-                        'hedging_recommended': True,
-                        'hedge_symbol': best_hedge['symbol'],
-                        'hedge_signal': best_hedge['signal'],
-                        'hedge_size_percent': best_hedge['size_percent'],
-                        'correlation': best_hedge['correlation'],
-                        'reasoning': f"Strong negative correlation ({best_hedge['correlation']:.2f}) with {primary_trade_symbol}",
-                        'validation': hedge_validation
-                    }
-                    
-                    print(f"✅ [Master Agent - Hedging] Recommendation: {best_hedge['signal']} {best_hedge['symbol']} ({best_hedge['size_percent']:.1%} size)")
-                    print(f"📊 [Master Agent - Hedging] Correlation: {best_hedge['correlation']:.2f}")
-                else:
-                    recommendation = {
-                        'hedging_recommended': False,
-                        'reason': 'Hedge validation failed',
-                        'validation': hedge_validation
-                    }
-            else:
-                recommendation = {
-                    'hedging_recommended': False,
-                    'reason': 'No suitable hedging instruments found'
-                }
-            
-            # Store hedging analysis
-            if not hasattr(self, 'hedging_history'):
-                self.hedging_history = []
-            
-            from datetime import datetime
-            self.hedging_history.append({
-                'timestamp': datetime.now(),
-                'primary_symbol': primary_trade_symbol,
-                'primary_signal': primary_trade_signal,
-                'recommendation': recommendation,
-                'candidates_analyzed': len(hedging_candidates)
-            })
-            
-            return recommendation
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Hedging] Error: {e}")
-            return {'hedging_recommended': False, 'error': str(e)}
-    
-    def _validate_hedge_with_specialists(self, hedge_candidate):
-        """Validate hedging recommendation with specialist agents"""
-        try:
-            validation_scores = []
-            
-            # Simple validation logic
-            if hedge_candidate['correlation'] < -0.2:  # Strong negative correlation
-                validation_scores.append(0.8)
-            
-            if hedge_candidate['size_percent'] <= 0.2:  # Reasonable size
-                validation_scores.append(0.7)
-            
-            avg_score = sum(validation_scores) / len(validation_scores) if validation_scores else 0.5
-            approved = avg_score > 0.6
-            
-            return {
-                'approved': approved,
-                'score': avg_score,
-                'validation_factors': f"{len(validation_scores)} factors analyzed"
-            }
-            
-        except Exception as e:
-            return {'approved': False, 'error': str(e)}
-    
-    def analyze_closed_trade(self, trade_data):
-        """
-        6. Post-Trade Analysis
-        Analyze closed trades to improve future decisions
-        """
-        try:
-            print(f"📈 [Master Agent - Post-Trade] Analyzing closed trade: {trade_data.get('symbol', 'Unknown')}")
-            
-            analysis_results = {
-                'trade_id': trade_data.get('trade_id', 'N/A'),
-                'symbol': trade_data.get('symbol', 'Unknown'),
-                'signal': trade_data.get('signal', 'Unknown'),
-                'entry_price': trade_data.get('entry_price', 0),
-                'exit_price': trade_data.get('exit_price', 0),
-                'pnl': trade_data.get('pnl', 0),
-                'close_reason': trade_data.get('close_reason', 'Unknown'),
-                'duration_hours': trade_data.get('duration_hours', 0)
-            }
-            
-            # Performance categorization
-            pnl = analysis_results['pnl']
-            if pnl > 0:
-                performance_category = 'PROFITABLE'
-            elif pnl < -0.02:  # Loss > 2%
-                performance_category = 'SIGNIFICANT_LOSS'
-            else:
-                performance_category = 'MINOR_LOSS'
-            
-            analysis_results['performance_category'] = performance_category
-            
-            # Analyze specialist agent accuracy
-            specialist_accuracy = {}
-            
-            # This would compare original agent predictions with actual outcome
-            for agent_name in self.specialist_agents.keys():
-                # Simulate accuracy analysis
-                import random
-                predicted_correctly = random.choice([True, False])
-                confidence_was_appropriate = random.choice([True, False])
-                
-                specialist_accuracy[agent_name] = {
-                    'predicted_correctly': predicted_correctly,
-                    'confidence_appropriate': confidence_was_appropriate,
-                    'accuracy_score': 0.8 if predicted_correctly else 0.3
-                }
-            
-            analysis_results['specialist_accuracy'] = specialist_accuracy
-            
-            # Decision quality analysis
-            decision_quality_factors = []
-            
-            # Entry timing analysis
-            if performance_category == 'PROFITABLE':
-                if analysis_results['duration_hours'] < 24:
-                    decision_quality_factors.append("Quick profit realization")
-                else:
-                    decision_quality_factors.append("Patient profit taking")
-            else:
-                if analysis_results['duration_hours'] < 2:
-                    decision_quality_factors.append("Quick stop loss execution")
-                elif analysis_results['duration_hours'] > 168:  # 7 days
-                    decision_quality_factors.append("Delayed loss recognition")
-            
-            # Risk management analysis
-            if 'emergency' in analysis_results['close_reason'].lower():
-                decision_quality_factors.append("Emergency stop loss triggered")
-            elif 'take_profit' in analysis_results['close_reason'].lower():
-                decision_quality_factors.append("Take profit achieved")
-            
-            analysis_results['decision_quality_factors'] = decision_quality_factors
-            
-            # Learning insights
-            learning_insights = []
-            
-            # Check if this trade type should be avoided
-            if performance_category == 'SIGNIFICANT_LOSS':
-                learning_insights.append(f"Review {analysis_results['signal']} signals for {analysis_results['symbol']}")
-                
-                # Check if multiple agents were wrong
-                wrong_agents = [name for name, acc in specialist_accuracy.items() if not acc['predicted_correctly']]
-                if len(wrong_agents) > 3:
-                    learning_insights.append(f"Multiple agents failed: {', '.join(wrong_agents)}")
-            
-            elif performance_category == 'PROFITABLE':
-                # Identify what worked well
-                correct_agents = [name for name, acc in specialist_accuracy.items() if acc['predicted_correctly']]
-                if len(correct_agents) > 3:
-                    learning_insights.append(f"Strong agent consensus worked: {', '.join(correct_agents)}")
-            
-            analysis_results['learning_insights'] = learning_insights
-            
-            # Store post-trade analysis
-            if not hasattr(self, 'post_trade_analysis_history'):
-                self.post_trade_analysis_history = []
-            
-            from datetime import datetime
-            analysis_results['analysis_timestamp'] = datetime.now()
-            self.post_trade_analysis_history.append(analysis_results)
-            
-            # Display analysis results
-            print(f"📊 [Master Agent - Post-Trade] Performance: {performance_category}")
-            print(f"💰 [Master Agent - Post-Trade] P&L: {pnl:.4f}")
-            if decision_quality_factors:
-                print(f"⚖️ [Master Agent - Post-Trade] Quality: {' | '.join(decision_quality_factors)}")
-            if learning_insights:
-                print(f"🎓 [Master Agent - Post-Trade] Insights: {' | '.join(learning_insights)}")
-            
-            return analysis_results
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Post-Trade] Error: {e}")
-            return {'error': str(e)}
-    
-    async def send_intelligent_alert(self, alert_type, symbol, message, additional_data=None):
-        """
-        7. Intelligent Alerting Hub
-        Centralized intelligent alerting system
-        """
-        try:
-            from datetime import datetime
-            
-            # Alert categorization
-            alert_categories = {
-                'EMERGENCY': '🚨',
-                'WARNING': '⚠️',
-                'INFO': 'ℹ️',
-                'SUCCESS': '✅',
-                'ANALYSIS': '📊'
-            }
-            
-            alert_icon = alert_categories.get(alert_type, '📢')
-            
-            # Build comprehensive alert message
-            alert_message = f"{alert_icon} **{alert_type} ALERT** {alert_icon}\n\n"
-            alert_message += f"**Symbol:** {symbol}\n"
-            alert_message += f"**Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            alert_message += f"**Message:** {message}\n"
-            
-            # Add contextual information
-            if additional_data:
-                alert_message += "\n**Additional Context:**\n"
-                for key, value in additional_data.items():
-                    alert_message += f"• **{key.replace('_', ' ').title()}:** {value}\n"
-            
-            # Add specialist agent insights if available
-            try:
-                if hasattr(self, 'specialist_agents') and symbol:
-                    # Get quick insights from key agents
-                    quick_insights = {}
-                    
-                    if 'trend_analyzer' in self.specialist_agents:
-                        # This would use recent market data
-                        quick_insights['Trend'] = "Analysis unavailable (no market data)"
-                    
-                    if 'news_analyzer' in self.specialist_agents:
-                        quick_insights['News Sentiment'] = "Neutral (simulated)"
-                    
-                    if quick_insights:
-                        alert_message += "\n**Market Context:**\n"
-                        for insight_type, insight_value in quick_insights.items():
-                            alert_message += f"• **{insight_type}:** {insight_value}\n"
-            
-            except Exception as e:
-                alert_message += f"\n*Context analysis error: {e}*\n"
-            
-            # Add footer with system status
-            alert_message += f"\n---\n*Master Agent Alert System*"
-            
-            # Log the alert
-            print(alert_message)
-            
-            # Store alert history
-            if not hasattr(self, 'alert_history'):
-                self.alert_history = []
-            
-            alert_record = {
-                'timestamp': datetime.now(),
-                'type': alert_type,
-                'symbol': symbol,
-                'message': message,
-                'additional_data': additional_data,
-                'full_alert': alert_message
-            }
-            
-            self.alert_history.append(alert_record)
-            
-            # Keep only last 200 alerts
-            if len(self.alert_history) > 200:
-                self.alert_history = self.alert_history[-200:]
-            
-            # Here you would integrate with Discord/Telegram/Email APIs
-            # await self._send_to_discord(alert_message)
-            # await self._send_to_telegram(alert_message)
-            # await self._send_email_alert(alert_message)
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ [Master Agent - Alert] Error sending alert: {e}")
-            return False
-    
-    async def _send_to_discord(self, message):
-        """Send alert to Discord (placeholder)"""
-        # Implementation would use Discord webhook or bot API
-        pass
-    
-    async def _send_to_telegram(self, message):
-        """Send alert to Telegram (placeholder)"""
-        # Implementation would use Telegram bot API
-        pass
-    
-    async def _send_email_alert(self, message):
-        """Send alert via email (placeholder)"""
-        # Implementation would use SMTP
-        pass
-
 class AdvancedEnsembleManager:
     """Advanced Ensemble System with Bagging, Boosting, v Stacking"""
     
@@ -16825,7 +13501,7 @@ class AdvancedEnsembleManager:
             
             # Weighted ensemble prediction
             final_prediction = self._combine_predictions(
-                bagging_prediction, boosting_prediction, stacking_prediction, symbol
+                bagging_prediction, boosting_prediction, stacking_prediction
             )
             
             return final_prediction
@@ -16852,13 +13528,6 @@ class AdvancedEnsembleManager:
             
             final_prediction = max(prediction_counts, key=prediction_counts.get)
             final_confidence = max(confidences) * 0.8  # Bagging typically reduces confidence
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             return final_prediction, final_confidence
             
@@ -16893,23 +13562,9 @@ class AdvancedEnsembleManager:
             if total_weight > 0:
                 final_prediction = max(weighted_votes, key=weighted_votes.get)
                 final_confidence = weighted_votes[final_prediction] / total_weight
-                # Enhanced logging for confidence
-                conf_logger = get_trading_logger('ConfidenceManager')
-                log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             else:
                 final_prediction = "HOLD"
                 final_confidence = 0.5
-                # Enhanced logging for confidence
-                conf_logger = get_trading_logger('ConfidenceManager')
-                log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             return final_prediction, final_confidence
             
@@ -16934,13 +13589,6 @@ class AdvancedEnsembleManager:
             final_prediction, final_confidence = meta_model.predict(
                 level1_predictions, level1_confidences, symbol
             )
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            })
             
             return final_prediction, final_confidence
             
@@ -16948,7 +13596,7 @@ class AdvancedEnsembleManager:
             logging.error(f"Error in stacking prediction: {e}")
             return "HOLD", 0.5
     
-    def _combine_predictions(self, bagging_pred, boosting_pred, stacking_pred, symbol):
+    def _combine_predictions(self, bagging_pred, boosting_pred, stacking_pred):
         """Combine predictions from all ensemble methods"""
         try:
             # Extract predictionfixndonfidences
@@ -16968,13 +13616,6 @@ class AdvancedEnsembleManager:
             # Final prediction
             final_prediction = max(weighted_votes, key=weighted_votes.get)
             final_confidence = weighted_votes[final_prediction] / total_weight
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             return final_prediction, final_confidence
             
@@ -17117,7 +13758,6 @@ class XGBoostBoosting:
         confidence = np.random.uniform(0.7, 0.9)
         return prediction, confidence
 
-
 # Stacking Classes
 class MetaLearnerModel:
     def predict(self, level1_predictions, level1_confidences, symbol):
@@ -17131,9 +13771,6 @@ class EnhancedTradingBot:
 
     def __init__(self):
         print("🚀 [Bot Init] Starting EnhancedTradingBot initialization...")
-        
-        # Initialize logger first
-        self.logger = BOT_LOGGERS['BotAnalysis']
         
         # Core trading attributes
         print("🔧 [Bot Init] Setting up core trading attributes...")
@@ -17179,8 +13816,7 @@ class EnhancedTradingBot:
             print(f" [Bot Init] Failed to initialize Data Manager: {e}")
             import traceback
             traceback.print_exc()
-            print("⚠️ [Bot Init] Setting data_manager to None and continuing...")
-            self.data_manager = None
+            raise e
         
         print("🔧 [Bot Init] Initializing other components...")
         try:
@@ -17213,76 +13849,18 @@ class EnhancedTradingBot:
         self.portfolio_rl_agent = None
         self.drift_monitor = None
         
-        # Enhanced RL Flexibility Features - Optimized thresholds for better signal generation
+        # Enhanced RL Flexibility Features
         self.adaptive_confidence_thresholds = {
-            'BTCUSD': 0.25,   # Lowered from 0.47 for more opportunities
-            'ETHUSD': 0.25,   # Lowered from 0.47 for more opportunities
-            'XAUUSD': 0.30,   # Lowered from 0.50 - Gold needs slightly higher confidence
-            'SPX500': 0.35,   # Lowered from 0.52 - Index needs higher confidence  
-            'EURUSD': 0.30,   # Lowered from 0.50 - Forex needs slightly higher confidence
-            'DE40': 0.30,     # Lowered from 0.50
-            'USOIL': 0.30,    # Lowered from 0.50
-            'AUDUSD': 0.30,   # Lowered from 0.50
-            'AUDNZD': 0.30    # Lowered from 0.50
+            'BTCUSD': 0.52,
+            'ETHUSD': 0.52, 
+            'XAUUSD': 0.55,  # Gold needs higher confidence
+            'SPX500': 0.58,  # Index needs highest confidence
+            'EURUSD': 0.55   # Forex needs higher confidence
         }
-        
-        print("✅ [Bot Init] Optimized confidence thresholds for better signal generation")
         
         self.market_regime_detector = MarketRegimeDetector()
         self.rl_performance_tracker = RLPerformanceTracker()
-        self.production_confidence_manager = ProductionConfidenceManager()
         self.dynamic_action_space = DynamicActionSpace()
-        
-        print("🎯 [Bot Init] Production Confidence Manager initialized")
-        
-        # Initialize parallel processing
-        self.max_workers = min(4, mp.cpu_count())  # Limit workers for stability
-        self.feature_cache = {}  # Cache for computed features
-        self.feature_cache_ttl = 300  # 5 minutes TTL for feature cache
-        
-        print(f"⚡ [Bot Init] Parallel processing initialized with {self.max_workers} workers")
-        
-        # Production monitoring
-        self.production_metrics = {
-            'start_time': datetime.now(),
-            'total_cycles': 0,
-            'successful_cycles': 0,
-            'total_trades': 0,
-            'successful_trades': 0,
-            'api_health': {},
-            'performance_stats': {},
-            'error_counts': {}
-        }
-        
-        print("📊 [Bot Init] Production monitoring initialized")
-        
-        # Load production configuration if available
-        try:
-            from production_config import get_production_config, validate_api_keys
-            self.production_config = get_production_config()
-            self.api_validation = validate_api_keys()
-            
-            # Apply production confidence settings
-            if hasattr(self, 'production_confidence_manager'):
-                confidence_config = self.production_config['confidence']
-                self.production_confidence_manager.base_thresholds = {
-                    'BUY': confidence_config['BUY_THRESHOLD'],
-                    'SELL': confidence_config['SELL_THRESHOLD'], 
-                    'HOLD': confidence_config['HOLD_THRESHOLD']
-                }
-                self.production_confidence_manager.current_method = confidence_config['CALCULATION_METHOD']
-            
-            print("🔧 [Bot Init] Production configuration loaded successfully")
-            
-            # Log API validation results
-            valid_keys = sum(1 for v in self.api_validation.values() if v)
-            total_keys = len(self.api_validation)
-            print(f"🔑 [Bot Init] API Keys validated: {valid_keys}/{total_keys}")
-            
-        except ImportError:
-            print("⚠️ [Bot Init] Production config not found, using default settings")
-            self.production_config = None
-            self.api_validation = None
         
         # Multi-Task Learning Support
         self.task_specific_models = {
@@ -17309,7 +13887,7 @@ class EnhancedTradingBot:
         self.consecutive_data_failures = 0
         self.circuit_breaker_active = False
 
-        # Weekend close management
+        # Weekendlose management
         self.weekend_close_executed = False
 
         # Experiment systemintegration
@@ -17339,29 +13917,6 @@ class EnhancedTradingBot:
         self.test_news_manager_functionality()
         
         self._init_database()
-        
-        # Initialize Real-time Monitor for SL/TP detection
-        print("🔄 [Bot Init] Initializing Real-time Monitor...")
-        print(f"🔍 [Bot Init] Debug - data_manager: {self.data_manager is not None}")
-        print(f"🔍 [Bot Init] Debug - logger: {self.logger is not None}")
-        print(f"🔍 [Bot Init] Debug - ENABLE_REALTIME_MONITORING: {ENABLE_REALTIME_MONITORING}")
-        
-        try:
-            if self.data_manager is None:
-                raise ValueError("data_manager is None - cannot initialize RealTimeMonitor")
-            if self.logger is None:
-                raise ValueError("logger is None - cannot initialize RealTimeMonitor")
-            if not ENABLE_REALTIME_MONITORING:
-                raise ValueError("ENABLE_REALTIME_MONITORING is False - skipping initialization")
-            self.realtime_monitor = RealTimeMonitor(self.data_manager, self.logger)
-            # Set callback để xử lý khi SL/TP bị hit
-            self.realtime_monitor.set_position_hit_callback(self._handle_realtime_sl_tp_hit)
-            print(" [Bot Init] Real-time Monitor initialized successfully")
-        except Exception as e:
-            print(f" [Bot Init] Failed to initialize Real-time Monitor: {e}")
-            import traceback
-            traceback.print_exc()
-            self.realtime_monitor = None
         
         print(" [Bot Init] EnhancedTradingBot initialization completed successfully!")
 
@@ -17583,13 +14138,6 @@ class EnhancedTradingBot:
             # Select decision with highest weighted vote
             final_decision = max(decisions, key=decisions.get)
             final_confidence = decisions[final_decision]
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             # Apply final confidence adjustment based on decision consistency
             consistency_factor = self._calculate_decision_consistency(rl_action, master_action, ensemble_action)
@@ -17597,13 +14145,6 @@ class EnhancedTradingBot:
             
             # Clamp final confidence
             final_confidence = max(0.1, min(0.95, final_confidence))
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             # Log decision combination with enhanced details
             logger = BOT_LOGGERS['RLStrategy']
@@ -17724,13 +14265,6 @@ class EnhancedTradingBot:
             # Select decision with highest weighted vote
             final_decision = max(decisions, key=decisions.get)
             final_confidence = decisions[final_decision]
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             # Apply final confidence adjustment based on decision consistency
             consistency_factor = self._calculate_decision_consistency_with_online_learning(
@@ -17740,13 +14274,6 @@ class EnhancedTradingBot:
             
             # Clamp final confidence
             final_confidence = max(0.1, min(0.95, final_confidence))
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 
             
             # Log decision combination with enhanced details
             logger = BOT_LOGGERS['RLStrategy']
@@ -17802,170 +14329,6 @@ class EnhancedTradingBot:
         except Exception as e:
             logging.error(f"Error calculating dynamic weights with online learning: {e}")
             return {'rl': 0.3, 'master': 0.3, 'ensemble': 0.2, 'online': 0.2}
-    
-    def _combine_decisions_unified(self, rl_action, rl_confidence, master_action, master_confidence, ensemble_action, ensemble_confidence, online_action, online_confidence, symbol):
-        """Production-grade unified decision combination using ProductionConfidenceManager"""
-        try:
-            # Prepare signals for the new confidence manager
-            signals = {
-                'rl': {'action': rl_action, 'confidence': rl_confidence},
-                'master': {'action': master_action, 'confidence': master_confidence},
-                'ensemble': {'action': ensemble_action, 'confidence': ensemble_confidence},
-                'online': {'action': online_action, 'confidence': online_confidence}
-            }
-            
-            # Get market data if available
-            market_data = {}
-            try:
-                if hasattr(self, 'market_regime_detector') and symbol in getattr(self, 'symbol_data', {}):
-                    regime, regime_confidence = self.market_regime_detector.detect_regime(symbol, self.symbol_data[symbol])
-                    volatility = self._calculate_volatility(symbol)
-                    market_data = {
-                        'regime': regime,
-                        'regime_confidence': regime_confidence,
-                        'volatility': volatility,
-                        'trend_strength': regime_confidence if regime in ['trending_up', 'trending_down'] else 0.5
-                    }
-            except Exception as e:
-                logging.warning(f"Could not get market data for {symbol}: {e}")
-            
-            # Use the new production confidence manager
-            final_decision, final_confidence, method_used = self.production_confidence_manager.calculate_final_confidence(
-                symbol, signals, market_data
-            )
-            
-            # Log the decision with method used
-            logger = BOT_LOGGERS.get('RLStrategy', logging.getLogger())
-            logger.info(f" [Production Confidence] {symbol}: {final_decision} ({final_confidence:.2%}) via {method_used}")
-            
-            return final_decision, final_confidence
-            
-        except Exception as e:
-            logging.error(f"Error combining unified decisions: {e}")
-            # Fallback to simple decision
-            all_actions = [rl_action, master_action, ensemble_action, online_action]
-            most_common = max(set(all_actions), key=all_actions.count)
-            avg_confidence = (rl_confidence + master_confidence + ensemble_confidence + online_confidence) / 4
-            return most_common, avg_confidence
-    
-    def _calculate_volatility(self, symbol):
-        """Calculate volatility for the symbol"""
-        try:
-            if symbol not in getattr(self, 'symbol_data', {}):
-                return 0.5  # Default volatility
-            
-            data = self.symbol_data[symbol]
-            if len(data) < 20:
-                return 0.5
-            
-            # Calculate 20-period ATR-based volatility
-            closes = data['close'].values
-            highs = data['high'].values
-            lows = data['low'].values
-            
-            # True Range calculation
-            tr_values = []
-            for i in range(1, len(closes)):
-                tr = max(
-                    highs[i] - lows[i],
-                    abs(highs[i] - closes[i-1]),
-                    abs(lows[i] - closes[i-1])
-                )
-                tr_values.append(tr)
-            
-            if not tr_values:
-                return 0.5
-            
-            # Average True Range
-            atr = sum(tr_values[-20:]) / min(20, len(tr_values))
-            
-            # Normalize ATR to price (as percentage)
-            current_price = closes[-1]
-            volatility = (atr / current_price) if current_price > 0 else 0.5
-            
-            # Scale to 0-1 range (typical forex volatility is 0.5-3%)
-            normalized_volatility = min(1.0, max(0.0, volatility / 0.03))
-            
-            return normalized_volatility
-            
-        except Exception as e:
-            logging.warning(f"Error calculating volatility for {symbol}: {e}")
-            return 0.5
-    
-    def update_production_metrics(self, symbol: str, decision: str, confidence: float, outcome: float = None):
-        """Update production metrics and performance tracking"""
-        try:
-            # Update production confidence manager
-            if outcome is not None:
-                self.production_confidence_manager.update_performance(symbol, confidence, outcome)
-                
-                # Update production metrics
-                self.production_metrics['total_trades'] += 1
-                if outcome > 0:
-                    self.production_metrics['successful_trades'] += 1
-            
-            # Update performance stats
-            if symbol not in self.production_metrics['performance_stats']:
-                self.production_metrics['performance_stats'][symbol] = {
-                    'total_signals': 0,
-                    'avg_confidence': 0.5,
-                    'confidence_history': []
-                }
-            
-            stats = self.production_metrics['performance_stats'][symbol]
-            stats['total_signals'] += 1
-            stats['confidence_history'].append(confidence)
-            
-            # Keep only last 100 confidence values
-            if len(stats['confidence_history']) > 100:
-                stats['confidence_history'] = stats['confidence_history'][-100:]
-            
-            # Update average confidence
-            stats['avg_confidence'] = sum(stats['confidence_history']) / len(stats['confidence_history'])
-            
-        except Exception as e:
-            logging.error(f"Error updating production metrics: {e}")
-            
-    def get_production_health_report(self) -> dict:
-        """Generate comprehensive production health report"""
-        try:
-            uptime = datetime.now() - self.production_metrics['start_time']
-            
-            # Calculate success rates
-            trade_success_rate = 0.5
-            if self.production_metrics['total_trades'] > 0:
-                trade_success_rate = self.production_metrics['successful_trades'] / self.production_metrics['total_trades']
-            
-            cycle_success_rate = 0.5
-            if self.production_metrics['total_cycles'] > 0:
-                cycle_success_rate = self.production_metrics['successful_cycles'] / self.production_metrics['total_cycles']
-            
-            # Get confidence manager stats
-            confidence_stats = {}
-            for symbol in self.production_confidence_manager.performance_metrics:
-                perf = self.production_confidence_manager.performance_metrics[symbol]
-                confidence_stats[symbol] = {
-                    'success_rate': perf.get('success_rate', 0.5),
-                    'total_trades': perf.get('total_trades', 0),
-                    'confidence_ranges': perf.get('confidence_ranges', {})
-                }
-            
-            return {
-                'uptime_hours': uptime.total_seconds() / 3600,
-                'trade_success_rate': trade_success_rate,
-                'cycle_success_rate': cycle_success_rate,
-                'total_trades': self.production_metrics['total_trades'],
-                'total_cycles': self.production_metrics['total_cycles'],
-                'confidence_stats': confidence_stats,
-                'api_health': self.production_metrics.get('api_health', {}),
-                'error_counts': self.production_metrics.get('error_counts', {}),
-                'performance_stats': self.production_metrics.get('performance_stats', {}),
-                'current_method': getattr(self.production_confidence_manager, 'current_method', 'adaptive_dynamic')
-            }
-            
-        except Exception as e:
-            logging.error(f"Error generating health report: {e}")
-            return {'error': str(e)}
     
     def _calculate_decision_consistency_with_online_learning(self, rl_action, master_action, ensemble_action, online_action):
         """Calculate consistency factor including online learning"""
@@ -18107,8 +14470,8 @@ class EnhancedTradingBot:
                     pips REAL,
                     confidence REAL,
                     -- all from m I CHO TCA --
-                    signal_price REAL,    -- Giá tại thời điểm tạo tín hiệu
-                    execution_slippage_pips REAL, -- trượt giá khi thực hiện lệnh
+                    signal_price REAL,    -- Gi mid t i thi dim T+n hi+u
+                    execution_slippage_pips REAL, -- tru t gi khi t hnh dng
                     spread_cost_pips REAL -- Chi ph spread
                 )
             """
@@ -18230,7 +14593,7 @@ class EnhancedTradingBot:
                 trades_query = """
                     SELECT pips, entry_price, exit_price, id, closed_at
                     FROM trades 
-                    WHERE symbol = ? AND exit_price IS NOT NULL
+                    WHERE symbol =  AND exit_price IS NOT NULL
                     ORDER BY id DESC
                     LIMIT 100
                 """
@@ -18238,7 +14601,7 @@ class EnhancedTradingBot:
                 trades_query = """
                     SELECT pips, entry_price, exit_price, opened_at, closed_at
                     FROM trades 
-                    WHERE symbol = ? AND exit_price IS NOT NULL
+                    WHERE symbol =  AND exit_price IS NOT NULL
                     ORDER BY opened_at DESC
                     LIMIT 100
                 """
@@ -18863,20 +15226,7 @@ class EnhancedTradingBot:
         if force_retrain_symbols is None:
             force_retrain_symbols = []
 
-        # <<< NEW: Check if models exist, if not force retrain all >>>
-        missing_models = []
-        for symbol in SYMBOLS:
-            trending_model = load_latest_model(symbol, "ensemble_trending")
-            ranging_model = load_latest_model(symbol, "ensemble_ranging")
-            if not trending_model or not ranging_model:
-                missing_models.append(symbol)
-        
-        if missing_models:
-            print(f"🚨 [Auto-Train] No models found for {len(missing_models)} symbols: {missing_models}")
-            print(f"🔄 [Auto-Train] Will train models for all missing symbols...")
-            force_retrain_symbols.extend(missing_models)
-
-        # <<< ORIGINAL: Check symbols needs retrain do stale data >>>
+        # <<< TreceiveANG M I: Check symbols needs retrain do stale data >>>
         stale_symbols = self.data_manager.get_stale_symbols()
         if stale_symbols:
             print(f"🔄 [Auto-Retrain] Detected {len(stale_symbols)} symbols need retraining due to stale data: {stale_symbols}")
@@ -19050,76 +15400,16 @@ class EnhancedTradingBot:
             print(f"   - trending_model c: {symbol in self.trending_models}")
             print(f"   - ranging_model c: {symbol in self.ranging_models}")
 
-            # Special handling for crypto symbols - always activate if market is open
-            crypto_fallback_activated = False
-            print(f"   [Debug] Activation check for {symbol}:")
-            print(f"   [Debug]   - is_symbol_active: {is_symbol_active}")
-            print(f"   [Debug]   - is_crypto_symbol({symbol}): {is_crypto_symbol(symbol)}")
-            print(f"   [Debug]   - is_market_open({symbol}): {is_market_open(symbol)}")
-            print(f"   [Debug]   - Condition result: {is_symbol_active or (is_crypto_symbol(symbol) and is_market_open(symbol))}")
-            
-            if is_symbol_active or (is_crypto_symbol(symbol) and is_market_open(symbol)):
-                try:
-                    self.active_symbols.add(symbol)
-                    print(f"  ✅ Symbol {symbol} has been activated! Active symbols count: {len(self.active_symbols)}")
-                    if is_symbol_active:
-                        print(f"  ✅ Symbol {symbol} has been activated (with models).")
-                    else:
-                        # Crypto fallback: Use existing models even if they don't meet strict quality gates
-                        if is_crypto_symbol(symbol):
-                            if model_trending:
-                                self.trending_models[symbol] = model_trending
-                                print(f"  🔄 Crypto {symbol}: Using TRENDING model (fallback mode)")
-                            if model_ranging:
-                                self.ranging_models[symbol] = model_ranging
-                                print(f"  🔄 Crypto {symbol}: Using RANGING model (fallback mode)")
-                            crypto_fallback_activated = True
-                            print(f"  🔄 Symbol {symbol} activated as crypto (fallback mode - will train models later).")
-                except Exception as e:
-                    print(f"  ❌ Error activating {symbol}: {e}")
-                    # Force add crypto symbols even if there's an error
-                    if is_crypto_symbol(symbol):
-                        self.active_symbols.add(symbol)
-                        print(f"  🚨 Force-activated crypto symbol {symbol} despite error")
+            if is_symbol_active:
+                self.active_symbols.add(symbol)
+                print(f"  Symbol {symbol} has been activated.")
             else:
-                # Only remove models for non-crypto symbols or crypto without fallback
-                if not (is_crypto_symbol(symbol) and crypto_fallback_activated):
-                    self.trending_models.pop(symbol, None)
-                    self.ranging_models.pop(symbol, None)
-                    print(f"  ⚠️ Symbol {symbol} deactivated - no models meet standards.")
+                self.trending_models.pop(symbol, None)
+                self.ranging_models.pop(symbol, None)
+                print(f"  Symbol {symbol} BV HI U HA do not c model no d t chu n.")
 
 
 
-        # --- CRYPTO BACKUP ACTIVATION ---
-        print(f"\n🔧 [CRYPTO BACKUP] Ensuring crypto symbols are activated...")
-        crypto_symbols_to_check = ['BTCUSD', 'ETHUSD']
-        for crypto_symbol in crypto_symbols_to_check:
-            if crypto_symbol not in self.active_symbols and is_crypto_symbol(crypto_symbol):
-                print(f"   🚨 [CRYPTO BACKUP] {crypto_symbol} missing from active symbols - force adding")
-                self.active_symbols.add(crypto_symbol)
-                
-                # Try to load models if not already loaded
-                if crypto_symbol not in self.trending_models:
-                    model_trending = load_latest_model(crypto_symbol, "ensemble_trending")
-                    if model_trending:
-                        self.trending_models[crypto_symbol] = model_trending
-                        print(f"   🔧 [CRYPTO BACKUP] Loaded TRENDING model for {crypto_symbol}")
-                
-                if crypto_symbol not in self.ranging_models:
-                    model_ranging = load_latest_model(crypto_symbol, "ensemble_ranging")
-                    if model_ranging:
-                        self.ranging_models[crypto_symbol] = model_ranging
-                        print(f"   🔧 [CRYPTO BACKUP] Loaded RANGING model for {crypto_symbol}")
-            else:
-                print(f"   ✅ [CRYPTO BACKUP] {crypto_symbol} already active")
-
-        # --- DEBUG: Final active symbols summary ---
-        print(f"\n🎯 [FINAL SUMMARY] Symbol Processing Complete:")
-        print(f"   - Total active symbols: {len(self.active_symbols)}")
-        print(f"   - Active symbols list: {list(self.active_symbols)}")
-        print(f"   - Trending models loaded: {list(self.trending_models.keys())}")
-        print(f"   - Ranging models loaded: {list(self.ranging_models.keys())}")
-        
         # --- Vng l p processing RL Agent ---
         if self.use_rl:
             rl_model_path = os.path.join(MODEL_DIR, "rl_portfolio_agent.zip")
@@ -19213,7 +15503,7 @@ class EnhancedTradingBot:
                     direction="maximize"
                 )
                 
-                study.optimize(lambda trial: self._objective_rl_portfolio(trial, train_env, val_env), n_trials=25)  # Reduced from 100 to 25
+                study.optimize(lambda trial: self._objective_rl_portfolio(trial, train_env, val_env), n_trials=100)
                 best_params = study.best_params
                 print(f"   [Optuna] Optimal parameters found: {best_params}")
 
@@ -19719,20 +16009,13 @@ class EnhancedTradingBot:
                     logger.debug(f" [RL Strategy] Fetching data for {symbol}...")
                     print(f"   [RL Strategy] Fetching data for {symbol}...")
                     df_features = self.data_manager.create_enhanced_features(symbol)
-                    if df_features is not None and len(df_features) >= 50:  # Reduced threshold from 100 to 50
+                    if df_features is not None and len(df_features) >= 100:
                         live_data_cache[symbol] = df_features
                         logger.debug(f"[RL Strategy] {symbol}: {len(df_features)} candles")
                         print(f"   [RL Strategy] {symbol}: {len(df_features)} candles")
                     else:
                         logger.warning(f" [RL Strategy] {symbol}: data khng d ({len(df_features) if df_features is not None else 0} candles)")
                         print(f"   [RL Strategy]  {symbol}: data khng d ({len(df_features) if df_features is not None else 0} candles)")
-                        # Try to get cached data as fallback
-                        if hasattr(self, 'data_manager') and hasattr(self.data_manager, 'get_cached_data'):
-                            cached_data = self.data_manager.get_cached_data(symbol)
-                            if cached_data is not None and len(cached_data) >= 50:
-                                live_data_cache[symbol] = cached_data
-                                logger.info(f"[RL Strategy] Using cached data for {symbol}: {len(cached_data)} candles")
-                                print(f"   [RL Strategy] Using cached data for {symbol}: {len(cached_data)} candles")
                 except Exception as e:
                     print(f"   [RL Strategy] {symbol}: Li fetch data - {e}")
                     import traceback
@@ -19778,11 +16061,6 @@ class EnhancedTradingBot:
                         df_features_for_pred = pd.DataFrame(df_features_array, columns=feature_columns, index=df_features.index)
                         # EnsembleModel chreceive 1 tham s(DataFrame)
                         prob_buy = ensemble_model.predict_proba(df_features_for_pred)
-                        # Ensure prob_buy is a scalar value
-                        if hasattr(prob_buy, '__len__') and len(prob_buy) > 0:
-                            prob_buy = prob_buy[0] if hasattr(prob_buy[0], '__len__') else prob_buy[0]
-                        elif hasattr(prob_buy, 'item'):
-                            prob_buy = prob_buy.item()
                     except Exception as e:
                         logging.error(f"Prediction failed for {symbol}: {e}")
                         # Fallback: Using confidence old Or gi trmc dnh data nh
@@ -19794,11 +16072,7 @@ class EnhancedTradingBot:
                     # Add randomness to avoid confidence clustering
                     if prob_buy_smoothed == 0.5:  # if l gi trfallback
                         import random
-                        # Enhanced randomization for crypto symbols
-                        if symbol in ['BTCUSD', 'ETHUSD']:
-                            prob_buy_smoothed = 0.5 + random.uniform(-0.15, 0.15)
-                        else:
-                            prob_buy_smoothed = 0.5 + random.uniform(-0.1, 0.1)
+                        prob_buy_smoothed = 0.5 + random.uniform(-0.1, 0.1)
                         prob_buy_smoothed = np.clip(prob_buy_smoothed, 0.05, 0.95)
                     
                     # Apply uncertainty penalty for extreme predictions
@@ -19819,33 +16093,20 @@ class EnhancedTradingBot:
                         confidence = 0.15 - (0.05 - confidence) * 0.1
                     
                     confidence = np.clip(confidence, 0.1, 0.9)  # Cap between 10% and 90%
-                    
-                    # Market-specific confidence adjustments
-                    if symbol in ['BTCUSD', 'ETHUSD']:
-                        # Crypto symbols get slightly higher confidence range
-                        confidence = np.clip(confidence, 0.15, 0.95)
-                    else:
-                        # Standard range for other symbols
-                        confidence = np.clip(confidence, 0.1, 0.9)
 
                     live_confidences[symbol] = confidence
                     # Quan trng: s dng feature columns d duc sp xp (khng thm confidence) d khp vi training
                     market_obs = df_features_for_pred[feature_columns].tail(1).to_numpy()[0]
                     live_prices[symbol] = df_features['close'].iloc[-1]
 
-                # CRITICAL FIX: Ensure all symbols have the same number of features
-                # Use a fixed feature dimension for RL consistency
-                FIXED_FEATURE_DIM = ML_CONFIG.get("FEATURE_SELECTION_TOP_K", 60)
-                
                 if market_obs is None:
-                    market_obs = np.zeros(FIXED_FEATURE_DIM)
-                else:
-                    # Pad or truncate to fixed dimension
-                    if len(market_obs) < FIXED_FEATURE_DIM:
-                        padding = np.zeros(FIXED_FEATURE_DIM - len(market_obs))
-                        market_obs = np.append(market_obs, padding)
-                    elif len(market_obs) > FIXED_FEATURE_DIM:
-                        market_obs = market_obs[:FIXED_FEATURE_DIM]
+                    if model_ref_data:
+                        num_features = len(model_ref_data['feature_columns'])
+                        market_obs = np.zeros(num_features)
+                    else:
+                        # Fallback an ton if not c model no cho symbol this
+                        num_features = ML_CONFIG["FEATURE_SELECTION_TOP_K"]
+                        market_obs = np.zeros(num_features)
 
                 pos_state, pnl_state, time_state = 0.0, 0.0, 0.0
                 if symbol in self.open_positions:
@@ -19909,9 +16170,6 @@ class EnhancedTradingBot:
 
             logger.debug(" [RL Strategy] calling RL Agent predict...")
             action, _ = self.portfolio_rl_agent.model.predict(final_live_observation, deterministic=True)
-            # Enhanced logging for RL agent decisions
-            rl_logger = get_trading_logger('RLAgent')
-            rl_logger.debug(f"🎯 [RL] Portfolio action: {action} for {len(symbols_agent_knows)} symbols")
             action_vector = self._decode_actions_to_vector(action, symbols_agent_knows, self.portfolio_rl_agent.model)
             
             logger.info(f" [RL Strategy] Action vector used: {list(zip(symbols_agent_knows, action_vector))}")
@@ -19979,171 +16237,138 @@ class EnhancedTradingBot:
                         print(f"   [RL Skip] {symbol_to_act}: RL quyt dnh {['HOLD', 'BUY', 'SELL'][action_code]} nhung d {current_signal} position - bqua")
                         continue
                 
-                # Reduced debug logging to avoid spam - only log for non-HOLD actions
-                if action_code != 0:  # Only log for BUY/SELL actions
-                    logger.info(f" [Debug] {symbol_to_act}: action_code={action_code} ({['HOLD', 'BUY', 'SELL'][action_code]}), in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
-                    logger.info(f" [Debug] Processing path for {symbol_to_act}: {'UNIFIED_PROCESSING' if symbol_to_act in self.active_symbols and not has_position else 'SKIP_OR_FALLBACK'}")
+                # processing symbols c RL action BUY/SELL v not c position
+                print(f"   [Debug] {symbol_to_act}: action_code={action_code}, in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
+                logger.info(f" [Debug] {symbol_to_act}: action_code={action_code}, in_active_symbols={symbol_to_act in self.active_symbols}, has_position={has_position}")
+                logger.info(f" [Debug] Active symbols: {list(self.active_symbols)}")
                 
-                # UNIFIED PROCESSING: All active symbols go through Master Agent + Online Learning
-                if symbol_to_act in self.active_symbols and not has_position:
-                    # Get symbol data
+                # Process all symbols through Online Learning (including HOLD actions)
+                if symbol_to_act in self.active_symbols:
+                    # Always process through Online Learning for all active symbols
                     symbol_data = live_data_cache.get(symbol_to_act, pd.DataFrame())
                     
-                    # Always process through Online Learning for all active symbols
+                    # Get Online Learning prediction for this symbol
                     online_decision, online_confidence = self.auto_retrain_manager.online_learning.get_online_prediction_enhanced(
                         symbol_to_act, symbol_data
                     )
+                    
                     logger.info(f"🔄 [Online Learning] {symbol_to_act}: Decision={online_decision}, Confidence={online_confidence:.2%}")
                     print(f"   [Online Learning] {symbol_to_act}: Decision={online_decision}, Confidence={online_confidence:.2%}")
                 
-                    # ALWAYS apply Master Agent Coordination for all symbols (not just BUY/SELL)
-                    logger.info(f" [Master Agent] Starting unified analysis for {symbol_to_act}")
-                    print(f"   [Master Agent] Starting unified analysis for {symbol_to_act}")
+                # Only proceed with full analysis for BUY/SELL actions without existing positions
+                if action_code in [1, 2] and symbol_to_act in self.active_symbols and not has_position:
+                    print(f"   [Debug] {symbol_to_act}: conditions met, starting Master Agent processing")
+                    # Enhanced action decoding with market regime
+                    market_regime, regime_confidence = self.market_regime_detector.detect_regime(live_data_cache.get(symbol_to_act, pd.DataFrame()))
+                    
+                    # Calculate volatility for dynamic action space
+                    symbol_data = live_data_cache.get(symbol_to_act, pd.DataFrame())
+                    volatility = symbol_data['close'].pct_change().std() * 100 if len(symbol_data) > 0 else 2.0
+                    
+                    # Get dynamic action space
+                    available_actions = self.dynamic_action_space.get_action_space(symbol_to_act, market_regime, volatility)
+                    
+                    # Decode action with enhanced logic
+                    action_name, confidence_multiplier = self.dynamic_action_space.decode_action(action_code, symbol_to_act, market_regime)
+                    
+                    # Apply adaptive confidence threshold
+                    adaptive_threshold = self.rl_performance_tracker.get_adaptive_threshold(symbol_to_act)
+                    adjusted_confidence = confidence * confidence_multiplier
+                    
+                    # Apply Transfer Learning
+                    source_symbols = [s for s in self.active_symbols if s != symbol_to_act]
+                    if source_symbols:
+                        source_performance = {s: self.rl_performance_tracker.symbol_performance.get(s, {}).get('successful_actions', 0) / max(1, self.rl_performance_tracker.symbol_performance.get(s, {}).get('total_actions', 1)) for s in source_symbols}
+                        transferred_performance, transfer_weights = self.transfer_learning_manager.transfer_knowledge(symbol_to_act, source_symbols, source_performance)
+                        
+                        # Adjust confidence based on transferred knowledge
+                        transfer_multiplier = 1.0 + (transferred_performance - 0.5) * 0.2  # 10% adjustment
+                        adjusted_confidence *= transfer_multiplier
+                    
+                    # Apply Master Agent Coordination
+                    logger.info(f" [Master Agent] Starting analysis for {symbol_to_act}")
+                    print(f"   [Master Agent] Starting analysis for {symbol_to_act}")
                     print(f"   [Debug] Master Agent Coordinator: {self.master_agent_coordinator}")
-                    print(f"   [Debug] Symbol data shape: {symbol_data.shape if not symbol_data.empty else 'EMPTY'}")
                     
                     try:
                         master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                             'trading_decision', symbol_data, symbol_to_act
                         )
-                        # Enhanced logging for Master Agent decisions
-                        master_logger = get_trading_logger('MasterAgent')
-                        log_trade_decision(master_logger, symbol_to_act, {
-                            'action': master_decision,
-                            'reasoning': 'Master Agent coordination with specialist agents',
-                            'risk_score': 1.0 - master_confidence
-                        })
-                        logger.info(f" [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
-                        print(f"   [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
+                        logger.info(f" [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
+                        print(f"   [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
                     except Exception as e:
-                        logger.error(f"[Master Agent] ❌ Error analyzing {symbol_to_act}: {e}")
-                        print(f"   [Master Agent] ❌ Error analyzing {symbol_to_act}: {e}")
+                        logger.error(f"[Master Agent] Error analyzing {symbol_to_act}: {e}")
+                        print(f"   [Master Agent] Error analyzing {symbol_to_act}: {e}")
                         master_decision, master_confidence = "HOLD", 0.5
                     
-                    # Apply Advanced Ensemble Prediction for all symbols
+                    # Apply Advanced Ensemble Prediction
                     ensemble_decision, ensemble_confidence = self.ensemble_manager.predict_ensemble(
                         symbol_data, symbol_to_act
                     )
-                
-                    # Enhanced processing based on RL action type
-                    if action_code in [1, 2]:  # BUY/SELL actions get full enhanced processing
-                        print(f"   [Debug] {symbol_to_act}: BUY/SELL action, applying enhanced processing")
-                        
-                        # Enhanced action decoding with market regime
-                        market_regime, regime_confidence = self.market_regime_detector.detect_regime(symbol_data)
-                        
-                        # Calculate volatility for dynamic action space
-                        volatility = symbol_data['close'].pct_change().std() * 100 if len(symbol_data) > 0 else 2.0
-                        
-                        # Get dynamic action space
-                        available_actions = self.dynamic_action_space.get_action_space(symbol_to_act, market_regime, volatility)
-                        
-                        # Decode action with enhanced logic
-                        action_name, confidence_multiplier = self.dynamic_action_space.decode_action(action_code, symbol_to_act, market_regime)
-                        
-                        # Use production confidence manager for threshold
-                        adaptive_threshold = self.production_confidence_manager.get_optimal_threshold(symbol_to_act, action_name)
-                        adjusted_confidence = confidence * confidence_multiplier
-                        
-                        # Apply Transfer Learning
-                        source_symbols = [s for s in self.active_symbols if s != symbol_to_act]
-                        if source_symbols:
-                            source_performance = {s: self.rl_performance_tracker.symbol_performance.get(s, {}).get('successful_actions', 0) / max(1, self.rl_performance_tracker.symbol_performance.get(s, {}).get('total_actions', 1)) for s in source_symbols}
-                            transferred_performance, transfer_weights = self.transfer_learning_manager.transfer_knowledge(symbol_to_act, source_symbols, source_performance)
-                            
-                            # Adjust confidence based on transferred knowledge
-                            transfer_multiplier = 1.0 + (transferred_performance - 0.5) * 0.2  # 10% adjustment
-                            adjusted_confidence *= transfer_multiplier
-                        
-                        # Combine RL, Master Agent, Ensemble, and Online Learning decisions
-                        final_decision, final_confidence = self._combine_all_decisions_with_online_learning(action_name, adjusted_confidence,
-                            master_decision, master_confidence,
-                            ensemble_decision, ensemble_confidence,
-                            online_decision, online_confidence,
-                            symbol_to_act
-                        )
-                        # Enhanced logging for confidence
-                        conf_logger = get_trading_logger('ConfidenceManager')
-                        log_confidence(conf_logger, symbol, {
-                            'final': final_confidence,
-                            'method': 'production_confidence',
-                            'components': {'base': final_confidence}
-                        })
-                        
-                        logger.info(f" [RL Strategy] Enhanced decision for {symbol_to_act}:")
-                        logger.info(f"   - RL Action: {action_name} (confidence: {adjusted_confidence:.2%})")
-                        logger.info(f"   - Master Agent: {master_decision} (confidence: {master_confidence:.2%})")
-                        logger.info(f"   - Ensemble: {ensemble_decision} (confidence: {ensemble_confidence:.2%})")
-                        logger.info(f"   - Online Learning: {online_decision} (confidence: {online_confidence:.2%})")
-                        logger.info(f"   - Final Decision: {final_decision} (confidence: {final_confidence:.2%})")
-                        logger.info(f"   - Market Regime: {market_regime} (confidence: {regime_confidence:.2%})")
-                        logger.info(f"   - Volatility: {volatility:.2f}%")
-                        logger.info(f"   - Available Actions: {available_actions}")
-                        logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
-                        if source_symbols:
-                            logger.info(f"   - Transfer Learning: {transferred_performance:.2%} from {len(source_symbols)} symbols")
-                        
-                        # Check confidence threshold
-                        if final_confidence >= adaptive_threshold:
-                            logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
-                            tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
-                        else:
-                            logger.info(f" [RL Strategy] {symbol_to_act}: Final Confidence {final_confidence:.2%} < Threshold {adaptive_threshold:.2%}")
-                        
-                        # Update production metrics
-                        self.update_production_metrics(symbol_to_act, final_decision, final_confidence)
-                        
-                        # Trigger online learning feedback loop
-                        self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
                     
-                    elif action_code == 0:  # HOLD actions get simplified processing
-                        print(f"   [Debug] {symbol_to_act}: HOLD action, applying unified processing")
-                        
-                        # For HOLD actions, use simple decision combination
-                        action_name = "HOLD"
-                        adjusted_confidence = confidence
-                        adaptive_threshold = self.production_confidence_manager.get_optimal_threshold(symbol_to_act, action_name)
-                        
-                        # Combine decisions with equal weighting for HOLD actions
-                        final_decision, final_confidence = self._combine_decisions_unified(action_name, adjusted_confidence,
-                            master_decision, master_confidence,
-                            ensemble_decision, ensemble_confidence,
-                            online_decision, online_confidence,
-                            symbol_to_act
-                        )
-                        # Enhanced logging for confidence
-                        conf_logger = get_trading_logger('ConfidenceManager')
-                        log_confidence(conf_logger, symbol, {
-                            'final': final_confidence,
-                            'method': 'production_confidence',
-                            'components': {'base': final_confidence}
-                        })
-                        
-                        logger.info(f" [RL Strategy] Unified decision for {symbol_to_act}:")
-                        logger.info(f"   - RL Action: {action_name} (confidence: {adjusted_confidence:.2%})")
-                        logger.info(f"   - Master Agent: {master_decision} (confidence: {master_confidence:.2%})")
-                        logger.info(f"   - Ensemble: {ensemble_decision} (confidence: {ensemble_confidence:.2%})")
-                        logger.info(f"   - Online Learning: {online_decision} (confidence: {online_confidence:.2%})")
-                        logger.info(f"   - Final Decision: {final_decision} (confidence: {final_confidence:.2%})")
-                        logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
-                        
-                        # Check confidence threshold
-                        if final_confidence >= adaptive_threshold:
-                            logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
-                            tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
-                        else:
-                            logger.info(f" [RL Strategy] {symbol_to_act}: No action taken - {final_decision} ({final_confidence:.2%}) < Threshold {adaptive_threshold:.2%}")
-                        
-                        # Update production metrics
-                        self.update_production_metrics(symbol_to_act, final_decision, final_confidence)
-                        
-                        # Trigger online learning feedback loop
-                        self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
+                    # Combine RL, Master Agent, Ensemble, v Online Learning decisions
+                    final_decision, final_confidence = self._combine_all_decisions_with_online_learning(
+                        action_name, adjusted_confidence,
+                        master_decision, master_confidence,
+                        ensemble_decision, ensemble_confidence,
+                        online_decision, online_confidence,
+                        symbol_to_act
+                    )
+                    
+                    logger.info(f" [RL Strategy] Enhanced decision for {symbol_to_act}:")
+                    logger.info(f"   - RL Action: {action_name} (confidence: {adjusted_confidence:.2%})")
+                    logger.info(f"   - Master Agent: {master_decision} (confidence: {master_confidence:.2%})")
+                    logger.info(f"   - Ensemble: {ensemble_decision} (confidence: {ensemble_confidence:.2%})")
+                    logger.info(f"   - Online Learning: {online_decision} (confidence: {online_confidence:.2%})")
+                    logger.info(f"   - Final Decision: {final_decision} (confidence: {final_confidence:.2%})")
+                    logger.info(f"   - Market Regime: {market_regime} (confidence: {regime_confidence:.2%})")
+                    logger.info(f"   - Volatility: {volatility:.2f}%")
+                    logger.info(f"   - Available Actions: {available_actions}")
+                    logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
+                    if source_symbols:
+                        logger.info(f"   - Transfer Learning: {transferred_performance:.2%} from {len(source_symbols)} symbols")
+                    
+                    # Check confidence threshold
+                    if final_confidence >= adaptive_threshold and symbol_to_act not in self.open_positions:
+                        logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
+                        tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
+                    elif final_confidence >= adaptive_threshold and symbol_to_act in self.open_positions:
+                        logger.info(f"[RL Strategy] Skipping {symbol_to_act}: Already has open position")
+                    else:
+                        logger.info(f" [RL Strategy] {symbol_to_act}: Final Confidence {final_confidence:.2%} < Threshold {adaptive_threshold:.2%}")
+                    
+                    # Trigger online learning feedback loop
+                    self._trigger_online_learning_feedback_enhanced(symbol_to_act, final_decision, final_confidence, market_data=symbol_data)
                 
-                # Skip symbols with existing positions
-                elif has_position:
-                    logger.info(f" [RL Strategy] {symbol_to_act}: Skipping - Already has open position")
-                    print(f"   [RL Strategy] {symbol_to_act}: Skipping - Already has open position")
+                # processing symbols c confidence cao nhung RL action = HOLD (fallback analysis)
+                elif action_code == 0 and symbol_to_act in self.active_symbols and symbol_to_act not in self.open_positions:
+                    if confidence > 0.52:  # Confidence threshold cho fallback analysis
+                        print(f"   [Debug] {symbol_to_act}: RL=HOLD nhung confidence cao, starting Master Agent processing")
+                        logger.info(f" [Master Agent] Starting analysis for {symbol_to_act}")
+                        print(f"   [Master Agent] Starting analysis for {symbol_to_act}")
+                        print(f"   [Debug] Master Agent Coordinator: {self.master_agent_coordinator}")
+                        
+                        try:
+                            master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
+                                'trading_decision', live_data_cache.get(symbol_to_act, pd.DataFrame()), symbol_to_act
+                            )
+                            logger.info(f" [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
+                            print(f"   [Master Agent] Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
+                        except Exception as e:
+                            logger.error(f"[Master Agent] Error analyzing {symbol_to_act}: {e}")
+                            print(f"   [Master Agent] Error analyzing {symbol_to_act}: {e}")
+                            master_decision, master_confidence = "HOLD", 0.5
+                
+                # Ly tn hiu t Ensemble model lm fallback
+                try:
+                    signal, ensemble_confidence, _ = self.get_enhanced_signal(symbol_to_act, df_features=live_data_cache.get(symbol_to_act))
+                    if signal and ensemble_confidence > ML_CONFIG["MIN_CONFIDENCE_TRADE"] and symbol_to_act not in self.open_positions:
+                        print(f"   [RL Fallback] {symbol_to_act}: RL=HOLD, Ensemble={signal} ({ensemble_confidence:.2%})")
+                        tasks.append(self.handle_position_logic(symbol_to_act, signal, ensemble_confidence))
+                    elif signal and ensemble_confidence > ML_CONFIG["MIN_CONFIDENCE_TRADE"] and symbol_to_act in self.open_positions:
+                        print(f"   [RL Fallback] {symbol_to_act}: Skipping - Already has open position")
+                except Exception as e:
+                    print(f"   [RL Fallback] Error in fallback analysis for {symbol_to_act}: {e}")
 
             # FALLBACK: Check cc active symbols khng trong RL Agent
             symbols_not_in_rl = self.active_symbols - set(symbols_agent_knows)
@@ -20165,13 +16390,6 @@ class EnhancedTradingBot:
                                 master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                                     'trading_decision', df_features, symbol
                                 )
-                                # Enhanced logging for Master Agent decisions
-                                master_logger = get_trading_logger('MasterAgent')
-                                log_trade_decision(master_logger, symbol, {
-                                    'action': master_decision,
-                                    'reasoning': 'Master Agent coordination analysis',
-                                    'risk_score': 1.0 - master_confidence
-                                })
                                 logger.info(f" [Master Agent] Result for {symbol}: {master_decision} (confidence: {master_confidence:.2%})")
                                 print(f"   [Master Agent] Result for {symbol}: {master_decision} (confidence: {master_confidence:.2%})")
                             except Exception as e:
@@ -20203,21 +16421,9 @@ class EnhancedTradingBot:
                 print(f"   [Async Execution] Executing {len(tasks)} trading signals...")
                 await asyncio.gather(*tasks)
                 logger.info(f"[RL Strategy] Completed executing {len(tasks)} trading signals")
-            else:
-                logger.info(f"[RL Strategy] No trading signals generated this cycle")
-                print(f"   [RL Strategy] No trading signals generated this cycle")
-            
-            # Summary logging
-            logger.info(f"[RL Strategy] CYCLE SUMMARY:")
-            logger.info(f"   - Total symbols processed: {len(active_symbols_to_process)}")
-            logger.info(f"   - Symbols in RL Agent: {len(symbols_agent_knows)}")
-            logger.info(f"   - Symbols not in RL: {len(self.active_symbols - set(symbols_agent_knows))}")
-            logger.info(f"   - Trading signals generated: {len(tasks)}")
-            logger.info(f"   - Current open positions: {len(self.open_positions)}")
-            print(f"   [RL Strategy] CYCLE SUMMARY: {len(active_symbols_to_process)} processed, {len(tasks)} signals, {len(self.open_positions)} positions")
                 
                 # --- BU C 4: Check CONCEPT DRIFT SAU KHI T T CSYMBOLS  U C analysis ---
-            await self.check_concept_drift_for_processed_symbols(active_symbols_to_process)
+                await self.check_concept_drift_for_processed_symbols(active_symbols_to_process)
 
         except Exception as e:
             import traceback
@@ -20258,7 +16464,7 @@ class EnhancedTradingBot:
         except Exception as e:
             print(f"[Background Retrain] Li retrain {symbol}: {e}")
 
-    def calculate_dynamic_position_size(self, symbol, confidence, llm_sentiment_score=0.0, master_agent_risk_multiplier=1.0):
+    def calculate_dynamic_position_size(self, symbol, confidence, llm_sentiment_score=0.0):
         """
         Calculate flexible position size, combining confidence, volatility, LLM sentiment and symbol allocation.
         Enhanced with safer risk limits and better validation.
@@ -20278,14 +16484,13 @@ class EnhancedTradingBot:
             # Nu LLM tiu cc, gim ri ro. Nu tch cc, tang ri ro.
             llm_multiplier = 1.0 + (llm_sentiment_score * 0.25)
 
-            # Yu t 4: Master Agent Risk Multiplier
-            print(f"   [Risk] Symbol: {symbol}, Allocation: {allocation_multiplier:.1f}x, Confidence: {confidence_multiplier:.2f}, LLM: {llm_multiplier:.2f}, Master Agent: {master_agent_risk_multiplier:.2f}x")
+            print(f"   [Risk] Symbol: {symbol}, Allocation: {allocation_multiplier:.1f}x, Confidence: {confidence_multiplier:.2f}, LLM: {llm_multiplier:.2f}")
 
-            # Yu t 5: Market volatility
+            # Yu t 4: Market volatility
             volatility_adjustment = self._calculate_volatility_adjustment(symbol)
 
-            # Calculate final risk with Master Agent multiplier
-            adjusted_risk = base_risk * allocation_multiplier * confidence_multiplier * llm_multiplier * master_agent_risk_multiplier * volatility_adjustment
+            # Calculate final risk with safer limits
+            adjusted_risk = base_risk * allocation_multiplier * confidence_multiplier * llm_multiplier * volatility_adjustment
 
             # Safer risk limits - khng vut qu 1.2x base risk v khng dui 0.3x base risk
             max_safe_risk = base_risk * 1.2
@@ -20360,20 +16565,11 @@ class EnhancedTradingBot:
             ).get(primary_tf)
             
             if df_primary_tf is not None and not df_primary_tf.empty:
-                # Check if we have enough data for ATR calculation
-                min_required_data = RISK_MANAGEMENT["VOLATILITY_LOOKBACK"] + 1
-                if len(df_primary_tf) < min_required_data:
-                    self._log_and_print("warning", f"Insufficient data for volatility adjustment for {symbol}: {len(df_primary_tf)} candles, need {min_required_data}")
-                    return 0.8
-                
-                # Use a smaller window if we don't have enough data
-                atr_window = min(RISK_MANAGEMENT["VOLATILITY_LOOKBACK"], len(df_primary_tf) - 1)
-                
                 atr_indicator = AverageTrueRange(
                     df_primary_tf["high"], 
                     df_primary_tf["low"], 
                     df_primary_tf["close"], 
-                    window=atr_window
+                    window=RISK_MANAGEMENT["VOLATILITY_LOOKBACK"]
                 )
                 atr_normalized = (atr_indicator.average_true_range() / df_primary_tf["close"]).ffill().bfill()
                 recent_volatility = atr_normalized.dropna().iloc[-1] if not atr_normalized.dropna().empty else 0.01
@@ -20391,23 +16587,11 @@ class EnhancedTradingBot:
                 symbol, count=RISK_MANAGEMENT["VOLATILITY_LOOKBACK"] + 5
             ).get(PRIMARY_TIMEFRAME)
             if df_primary_tf is not None and not df_primary_tf.empty:
-                # Check if we have enough data for ATR calculation
-                min_required_data = RISK_MANAGEMENT["VOLATILITY_LOOKBACK"] + 1
-                if len(df_primary_tf) < min_required_data:
-                    self._log_and_print("warning", f"Insufficient data for enhanced risk management for {symbol}: {len(df_primary_tf)} candles, need {min_required_data}")
-                    # Return fallback values
-                    fallback_sl = current_price * 0.98 if signal == "BUY" else current_price * 1.02
-                    fallback_tp = current_price * 1.02 if signal == "BUY" else current_price * 0.98
-                    return fallback_tp, fallback_sl
-                
-                # Use a smaller window if we don't have enough data
-                atr_window = min(RISK_MANAGEMENT["VOLATILITY_LOOKBACK"], len(df_primary_tf) - 1)
-                
                 atr_indicator = AverageTrueRange(
                     df_primary_tf["high"],
                     df_primary_tf["low"],
                     df_primary_tf["close"],
-                    window=atr_window,
+                    window=RISK_MANAGEMENT["VOLATILITY_LOOKBACK"],
                 )
                 atr_value = (
                     atr_indicator.average_true_range().dropna().iloc[-1]
@@ -20599,7 +16783,7 @@ class EnhancedTradingBot:
             return None # not c s kin no suitable
 
         except Exception as e:
-            print(f"Lỗi trong Function has_high_impact_event_soon: {e}")
+            print(f"Li in Function has_high_impact_event_soon: {e}")
             return None
 
     def determine_market_regime(self, symbol, use_cache=True):
@@ -20670,10 +16854,10 @@ class EnhancedTradingBot:
             # <<<  fix: G I Function get_economic_calendar M I >>>
             calendar = self.news_manager.get_economic_calendar()
             if calendar:
-                status_report_parts.append(f"Lấy được {len(calendar)} sự kiện từ Trading Economics.")
+                status_report_parts.append(f"L y d {len(calendar)} s kin th tTrading Economics.")
                 print(status_report_parts[-1])
             else:
-                status_report_parts.append(f"Không lấy được lịch kinh tế.")
+                status_report_parts.append(f"not l y d l ch kinh t .")
                 return
 
             now_utc = datetime.now(pytz.utc)
@@ -20741,14 +16925,14 @@ class EnhancedTradingBot:
                     self.send_discord_alert(alert_message)
                 return
 
-            # Kiểm tra bước 2: Không có sự kiện -> Gửi báo cáo empty thì "an toàn"
-            status_report_parts.append("Không có sự kiện nào sắp diễn ra. An toàn để giao dịch.")
+            # K ch b n 2: not c s kin -> G i bo co tempty thi "an ton"
+            status_report_parts.append("not c s kin vi m no s p di n ra. An ton dgiao dh.")
             print(status_report_parts[-1])
             if TRADE_FILTERS.get("SEND_PRE_CHECK_STATUS_ALERT", False):
                 self.send_discord_alert("\n".join(status_report_parts))
 
         except Exception as e:
-            print(f"Lỗi trong Function check_and_close_for_major_events: {e}")
+            print(f"Li in Functioncheck_and_close_for_major_events: {e}")
     def _execute_trending_strategy(self, symbol):
         """
         Execute trending strategy (your original logic).
@@ -20831,110 +17015,38 @@ class EnhancedTradingBot:
 
     async def handle_position_logic(self, symbol, signal, confidence):
         """
-        Refactored position logic with MasterAgent as central decision-maker.
-        Process: Basic checks -> Gather market data -> Ask Master Agent for final decision -> Execute if approved.
+        Main orchestra function to handle new position opening logic.
+        Process: Check symbol status -> Getopinions -> Basic filtering -> Ask Master Agent -> Calculate -> Open order.
+        Converted to asynfromo be compatible with new functions.
         """
         try:
-            # --- STEP 1: BASIC INITIAL CHECKS ---
+            # --- BU C 0: Check SYMBOL STATUS ---
             symbol_config = SYMBOL_ALLOCATION.get(symbol, {"weight": 1.0, "max_exposure": 0.1, "risk_multiplier": 1.0})
-            
-            # Check if symbol is in active symbols
+            # Check xem symbol fromrong danh scontainsctive not
             if symbol not in self.active_symbols:
-                print(f"[{symbol}] Symbol not activated in active_symbols")
+                print(f"[{symbol}] Symbol not d activate in active_symbols")
                 return
 
-            # Check minimum confidence threshold
-            if confidence < ML_CONFIG["MIN_CONFIDENCE_TRADE"]:
-                print(f"[{symbol}] Skipping: Confidence ({confidence:.2%}) too low.")
-                return
-
-            # --- STEP 2: GATHER ALL NECESSARY MARKET DATA ---
-            print(f"🔍 [{symbol}] Gathering market data for Master Agent analysis...")
-            
-            # Get technical reasoning and features
+            # --- BU C 1: L Y all LU N I M KTHU T ---
+            # (not g i LLM bu cthis)
             tech_reasoning = await self.gather_trade_reasoning(symbol, signal, confidence)
-            if "Error" in tech_reasoning:
+            if "Li" in tech_reasoning:
                 error_message = tech_reasoning.get('Error', 'Unknown error occurred')
                 print(f"[{symbol}] Skipping due to error when collecting reasoning: {error_message}")
                 return
 
-            # Get current price and features DataFrame
-            current_price = self.data_manager.get_current_price(symbol)
-            if current_price is None:
-                print(f"[{symbol}] Skipping: Unable to get current price")
+            # --- BU C 2: all BL C CO B N (not T N API) ---
+            if confidence < ML_CONFIG["MIN_CONFIDENCE_TRADE"]:
+                print(f"[{symbol}] Skipping: Confidence ({confidence:.2%}) too low.")
                 return
-
-            # Get features DataFrame for price action analysis
-            features_df = self.data_manager.create_enhanced_features(symbol)
-            if features_df is None or features_df.empty:
-                print(f"[{symbol}] Warning: No features data available, using fallback")
-                features_df = pd.DataFrame()
-
-            # Calculate price action score
-            pa_score = self.calculate_price_action_score(features_df)
-            
-            # --- STEP 2.1: MASTER AGENT DYNAMIC STRATEGY SELECTION ---
-            print(f"📊 [{symbol}] Consulting Master Agent for strategy selection...")
-            selected_strategy = self.master_agent_coordinator.select_active_strategy(symbol, features_df)
-            print(f"✅ [{symbol}] Master Agent selected strategy: {selected_strategy.upper()}")
-            
-            # --- STEP 2.2: MASTER AGENT DYNAMIC RISK ASSESSMENT ---
-            print(f"🎯 [{symbol}] Getting dynamic risk multiplier from Master Agent...")
-            risk_multiplier = self.master_agent_coordinator.get_dynamic_risk_multiplier()
-            print(f"📊 [{symbol}] Master Agent risk multiplier: {risk_multiplier:.2f}")
-            
-            # Update symbol config with Master Agent risk multiplier
-            symbol_config['master_agent_risk_multiplier'] = risk_multiplier
-            symbol_config['selected_strategy'] = selected_strategy
-            
-            # Prepare market data package for Master Agent
-            market_data = {
-                'price_data': features_df,
-                'current_price': current_price,
-                'pa_score': pa_score,
-                'technical_reasoning': tech_reasoning,
-                'symbol_config': symbol_config,
-                'selected_strategy': selected_strategy,
-                'risk_multiplier': risk_multiplier
-            }
-
-            # --- STEP 3: CONSULT MASTER AGENT FOR FINAL DECISION ---
-            print(f"🎯 [{symbol}] Consulting Master Agent for entry decision...")
-            master_decision = self.master_agent_coordinator.decide_trade_entry(
-                symbol=symbol,
-                market_data=market_data,
-                base_signal=signal,
-                base_confidence=confidence
-            )
-
-            # --- STEP 4: PROCESS MASTER AGENT DECISION ---
-            decision = master_decision.get("decision", "REJECT")
-            justification = master_decision.get("justification", "No justification provided")
-            
-            if decision.upper() == "REJECT":
-                print(f"❌ [{symbol}] Trade REJECTED by Master Agent: {justification}")
-                self.send_discord_alert(
-                    f"**ORDER REJECTED BY MASTER AGENT**\n"
-                    f"- **Order:** `{signal} {symbol}`\n"
-                    f"- **Reason:** *{justification}*\n"
-                    f"- **Confidence:** {confidence:.2%}"
-                )
-                return
-            
-            elif decision.upper() == "WAIT":
-                print(f"⏳ [{symbol}] Master Agent recommends WAITING: {justification}")
-                return
-
-            # --- STEP 5: EXECUTE APPROVED TRADE ---
-            print(f"✅ [{symbol}] Trade APPROVED by Master Agent: {justification}")
-            
-            # Perform remaining checks only after Master Agent approval
             if TRADE_FILTERS.get("SKIP_NEAR_HIGH_IMPACT_EVENTS", True) and self.has_high_impact_event_soon(symbol):
+                # Function already prints the reason
                 return
             if not self.portfolio_risk_check():
                 print(f"[{symbol}] Skipping: Portfolio risk has reached maximum level.")
                 return
             if not self.correlation_check(symbol, signal):
+                # Function already prints the reason
                 return
             if len(self.open_positions) >= RISK_MANAGEMENT["MAX_OPEN_POSITIONS"]:
                 print(f"[{symbol}] Skipping: Maximum number of positions reached.")
@@ -20943,47 +17055,39 @@ class EnhancedTradingBot:
                 print(f"[{symbol}] Skipping: Weekend trading.")
                 return
 
-            # Prepare final reasoning with Master Agent input
-            final_reasoning = tech_reasoning.copy()
-            final_reasoning["Master Agent Decision"] = justification
-            final_reasoning["Master Agent Confidence"] = f"{master_decision.get('confidence', confidence):.2%}"
-            
-            # Calculate position size with Master Agent risk multiplier
-            position_size = self.calculate_dynamic_position_size(symbol, confidence, 0.0, risk_multiplier)
-            tp, sl = self.enhanced_risk_management(symbol, signal, current_price, confidence)
-            
-            # --- STEP 5.1: CHECK FOR HEDGING OPPORTUNITIES ---
-            print(f"🛡️ [{symbol}] Checking for hedging opportunities...")
-            hedging_recommendation = self.master_agent_coordinator.get_hedging_recommendation(symbol, signal)
-            
-            if hedging_recommendation.get('hedging_recommended', False):
-                hedge_symbol = hedging_recommendation['hedge_symbol']
-                hedge_signal = hedging_recommendation['hedge_signal']
-                hedge_size = hedging_recommendation['hedge_size_percent']
-                
-                print(f"🛡️ [{symbol}] Master Agent recommends hedging: {hedge_signal} {hedge_symbol} ({hedge_size:.1%})")
-                
-                # Send hedging alert
-                await self.master_agent_coordinator.send_intelligent_alert(
-                    'INFO', 
-                    symbol, 
-                    f"Hedging opportunity identified: {hedge_signal} {hedge_symbol}",
-                    {
-                        'primary_trade': f"{signal} {symbol}",
-                        'hedge_trade': f"{hedge_signal} {hedge_symbol}",
-                        'hedge_size': f"{hedge_size:.1%}",
-                        'correlation': hedging_recommendation['correlation']
-                    }
-                )
-            else:
-                print(f"🛡️ [{symbol}] No hedging recommended: {hedging_recommendation.get('reason', 'No reason provided')}")
+            # --- BU C 3: L Y TIN T C V H I  KI N MASTER AGENT (1 API CALL DUY NH T) ---
+            news_items = await self.news_manager.get_aggregated_news(symbol)
+            master_decision_data = await self.consult_master_agent(symbol, signal, tech_reasoning, news_items)
 
-            # Open the position
+            # --- BU C 3.5: NH D U SYMBOL Check CONCEPT DRIFT SAU ---
+            # Concept drift sd Check sau khi t t csymbols has d analysis
+            # dtrnh gin do n qu trnh analysis
+
+            # if Master Agent t chi, gi thng bo v dng li
+            if master_decision_data.get("decision", "").upper() == "REJECT":
+                self.send_discord_alert(f"**ORDER REJECTED BY MASTER AGENT**  \n- **Order:** `{signal} {symbol}`\n- **Reason:** *{master_decision_data.get('justification')}*")
+                return
+
+            # --- BU C 4: HON THI N LU N I M V TNH TON THAM SL NH ---
+            final_reasoning = tech_reasoning
+            final_reasoning["Ph duy from modelaster Agent"] = master_decision_data.get('justification')
+            final_reasoning[" analysis LLM"] = f"**i m: {master_decision_data.get('sentiment_score', 0.0):.2f}**"
+
+            current_price = self.data_manager.get_current_price(symbol)
+            if current_price is None:
+                return
+
+            # L y di m sentiment tk t quof Master Agent dtnh ton kch thu c l nh
+            llm_score = master_decision_data.get('sentiment_score', 0.0)
+            position_size = self.calculate_dynamic_position_size(symbol, confidence, llm_score)
+            tp, sl = self.enhanced_risk_management(symbol, signal, current_price, confidence)
+
+            # --- BU C 5: MVTH---
             self.open_position_enhanced(symbol, signal, current_price, tp, sl, position_size, confidence, final_reasoning)
 
         except Exception as e:
             import traceback
-            error_message = f"Critical error processing {symbol}: {e}\n{traceback.format_exc()}"
+            error_message = f"Li nghim trng khi processing vth{symbol}: {e}\n{traceback.format_exc()}"
             print(error_message)
             self.send_discord_alert(error_message)
 
@@ -21026,19 +17130,14 @@ class EnhancedTradingBot:
 
             self.open_positions[symbol] = position_details
             save_open_positions(self.open_positions)
-            
-            # Bắt đầu real-time monitoring cho vị thế mới
-            if hasattr(self, 'realtime_monitor') and self.realtime_monitor:
-                self.realtime_monitor.update_positions(self.open_positions)
-                print(f"🔄 [Real-time Monitor] Started monitoring {symbol} for SL/TP hits")
 
-            # Extract Master Agent decision from reasoning
+            # Extracfrom modelaster Agent decision from reasoning
             master_decision = None
-            if "Master Agent Decision" in reasoning:
+            if "Ph duy from modelaster Agent" in reasoning:
                 master_decision = {
-                    "decision": "APPROVE",  # If we reach here, it was approved
-                    "justification": reasoning.get("Master Agent Decision", "N/A"),
-                    "confidence": reasoning.get("Master Agent Confidence", "N/A")
+                    "decision": "APPROVE",  # If we reach here, it wafixpproved
+                    "justification": reasoning.get("Ph duy from modelaster Agent", "N/A"),
+                    "sentiment_score": float(reasoning.get(" analysis LLM", "0.0").replace("**i m: ", "").replace("**", "")) if " analysis LLM" in reasoning else 0.0
                 }
 
             self.send_enhanced_alert(
@@ -21067,180 +17166,12 @@ class EnhancedTradingBot:
 
     # TM V THAY THFunction this in l p EnhancedTradingBot
 
-    async def _handle_realtime_sl_tp_hit(self, symbol, hit_result):
-        """
-        Callback function để xử lý khi Real-time Monitor phát hiện SL/TP bị hit
-        """
-        try:
-            hit_type = hit_result['type']
-            hit_price = hit_result['price']
-            method = hit_result['method']
-            
-            # Tạo reason message chi tiết
-            if method == 'wick_detection':
-                reason = f"Hit {hit_type} (Wick Detection)"
-                print(f"🎯 [Real-time Hit] {symbol}: {reason} at {hit_price:.5f}")
-                self.logger.info(f"🎯 [Real-time Hit] {symbol}: {hit_type} hit by wick detection at {hit_price:.5f}")
-            else:
-                reason = f"Hit {hit_type} (Real-time)"
-                print(f"🎯 [Real-time Hit] {symbol}: {reason} at {hit_price:.5f}")
-                self.logger.info(f"🎯 [Real-time Hit] {symbol}: {hit_type} hit by real-time monitoring at {hit_price:.5f}")
-            
-            # Đóng vị thế
-            await self.close_position_enhanced(symbol, reason, hit_price, send_alert=True)
-            
-            # Gửi Discord alert đặc biệt cho wick detection
-            if method == 'wick_detection':
-                alert_data = {
-                    "Symbol": symbol,
-                    "Type": hit_type,
-                    "Method": "Wick Detection",
-                    "Price": f"{hit_price:.5f}",
-                    "Candle Time": hit_result.get('candle_time', 'Unknown'),
-                    "Extreme Price": hit_result.get('candle_low') or hit_result.get('candle_high', 'N/A')
-                }
-                self.send_discord_alert(
-                    f"🎯 **WICK {hit_type} HIT DETECTED!**\n{symbol} - {reason}",
-                    "WARNING",
-                    "HIGH",
-                    alert_data
-                )
-            
-        except Exception as e:
-            self.logger.error(f"❌ [Real-time Hit] Error handling hit for {symbol}: {e}")
-            print(f"❌ [Real-time Hit] Error handling hit for {symbol}: {e}")
-    
-    def display_realtime_monitoring_status(self):
-        """Hiển thị trạng thái real-time monitoring"""
-        if not hasattr(self, 'realtime_monitor') or not self.realtime_monitor:
-            print("⚠️ [Real-time Monitor] Not initialized")
-            print(f"   - Reason: realtime_monitor attribute is {'missing' if not hasattr(self, 'realtime_monitor') else 'None'}")
-            print(f"   - ENABLE_REALTIME_MONITORING: {ENABLE_REALTIME_MONITORING}")
-            return
-        
-        status = self.realtime_monitor.get_monitoring_status()
-        
-        # Enhanced status display with position details
-        print(f"\n🔍 [Real-time Monitor] Status:")
-        print(f"   - Active: {status.get('active', False)}")
-        print(f"   - Enabled: {status.get('enabled', False)}")
-        print(f"   - Positions Count: {status.get('positions_count', 0)}")
-        print(f"   - Check Interval: {status.get('check_interval', 0)}s")
-        
-        if status.get('monitored_symbols'):
-            print(f"   - Monitored Symbols: {', '.join(status['monitored_symbols'])}")
-            
-            # Show position details for debugging
-            for symbol in status['monitored_symbols']:
-                if symbol in self.open_positions:
-                    pos = self.open_positions[symbol]
-                    print(f"     • {symbol}: {pos['signal']} | Entry: {pos['entry_price']:.5f} | SL: {pos['sl']:.5f} | TP: {pos['tp']:.5f}")
-        else:
-            print("   - No positions being monitored")
-        print(f"   - Check interval: {REALTIME_CHECK_INTERVAL}s")
-        print(f"   - Wick detection: {'✅' if ENABLE_WICK_DETECTION else '❌'}")
-        print(f"   - Wick candles: {WICK_DETECTION_CANDLES}")
-        print(f"   - Max retries: {MAX_REALTIME_RETRIES}")
-        print(f"   - Timeout: {REALTIME_TIMEOUT}s")
-    
-    async def test_sl_tp_detection(self, symbol=None):
-        """Test SL/TP detection manually for debugging"""
-        if not hasattr(self, 'realtime_monitor') or not self.realtime_monitor:
-            print("❌ [Test] Real-time monitor not initialized")
-            return
-        
-        if not self.open_positions:
-            print("⚠️ [Test] No open positions to test")
-            return
-        
-        symbols_to_test = [symbol] if symbol else list(self.open_positions.keys())
-        
-        print(f"\n🧪 [Test] Testing SL/TP detection for: {', '.join(symbols_to_test)}")
-        
-        for test_symbol in symbols_to_test:
-            if test_symbol not in self.open_positions:
-                print(f"⚠️ [Test] No position found for {test_symbol}")
-                continue
-                
-            position = self.open_positions[test_symbol]
-            print(f"\n📊 [Test] {test_symbol} Position:")
-            print(f"   Signal: {position['signal']}")
-            print(f"   Entry: {position['entry_price']:.5f}")
-            print(f"   SL: {position['sl']:.5f}")
-            print(f"   TP: {position['tp']:.5f}")
-            
-            # Test price fetching
-            try:
-                current_price = await self.realtime_monitor._get_realtime_price(test_symbol)
-                if current_price:
-                    print(f"   Current Price: {current_price:.5f}")
-                    
-                    # Test SL/TP logic
-                    hit_result = self.realtime_monitor._check_current_price_hit(position, current_price)
-                    if hit_result:
-                        print(f"   🎯 {hit_result} HIT DETECTED!")
-                    else:
-                        print(f"   ✅ No SL/TP hit")
-                        
-                        # Show distance to SL/TP
-                        if position['signal'] == 'BUY':
-                            sl_distance = (current_price - position['sl']) / current_price * 100
-                            tp_distance = (position['tp'] - current_price) / current_price * 100
-                        else:
-                            sl_distance = (position['sl'] - current_price) / current_price * 100  
-                            tp_distance = (current_price - position['tp']) / current_price * 100
-                            
-                        print(f"   Distance to SL: {sl_distance:.2f}%")
-                        print(f"   Distance to TP: {tp_distance:.2f}%")
-                else:
-                    print(f"   ❌ Failed to get current price")
-                    
-            except Exception as e:
-                print(f"   ❌ Error testing {test_symbol}: {e}")
-    
-    async def _check_realtime_monitoring_health(self):
-        """Check if real-time monitoring is working properly"""
-        if not hasattr(self, 'realtime_monitor') or not self.realtime_monitor:
-            return
-            
-        # Only check every 10 cycles (roughly every 10 minutes)
-        if not hasattr(self, '_monitoring_health_counter'):
-            self._monitoring_health_counter = 0
-        
-        self._monitoring_health_counter += 1
-        if self._monitoring_health_counter < 10:
-            return
-        
-        self._monitoring_health_counter = 0
-        
-        status = self.realtime_monitor.get_monitoring_status()
-        
-        # Check if monitoring should be active but isn't
-        if self.open_positions and not status.get('monitoring_active', False):
-            print(f"⚠️ [Health Check] Real-time monitoring should be active but isn't. Restarting...")
-            self.logger.warning("Real-time monitoring health check failed - restarting monitoring")
-            self.realtime_monitor.start_monitoring(self.open_positions)
-        
-        # Check if monitoring is active but no positions
-        elif not self.open_positions and status.get('monitoring_active', False):
-            print(f"🔄 [Health Check] No positions but monitoring is active. Stopping...")
-            self.realtime_monitor.stop_monitoring()
-        
-        # Log status for debugging
-        if self.open_positions:
-            print(f"🔍 [Health Check] Monitoring {len(self.open_positions)} positions: {list(self.open_positions.keys())}")
-
-    async def close_position_enhanced(self, symbol, reason, exit_price, send_alert=True):
+    def close_position_enhanced(self, symbol, reason, exit_price, send_alert=True):
         if symbol not in self.open_positions:
             return
         position = self.open_positions.pop(symbol)
         save_open_positions(self.open_positions)
         closed_at = datetime.now(pytz.timezone("Asia/Bangkok"))
-        
-        # Cập nhật real-time monitoring sau khi đóng vị thế
-        if hasattr(self, 'realtime_monitor') and self.realtime_monitor:
-            self.realtime_monitor.update_positions(self.open_positions)
-            print(f"🔄 [Real-time Monitor] Stopped monitoring {symbol}")
 
         # --- LOGIfromCA M I ---
         pip_value = self.calculate_pip_value(symbol)
@@ -21282,7 +17213,7 @@ class EnhancedTradingBot:
                     """INSERT INTO trades (symbol, signal, entry_price, exit_price,
                                           closed_at, reason, pips, confidence,
                                           signal_price, execution_slippage_pips, spread_cost_pips)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (, , , , , , , , , , )""",
                     trade_data,
                 )
                 self.conn.commit()
@@ -21297,96 +17228,7 @@ class EnhancedTradingBot:
             self.send_close_alert_enhanced(symbol, position, reason, exit_price, pips)
         print(f"     Closed {position['signal']} {symbol} @{exit_price:.5f}. Reason: {reason}. Pips: {pips:.1f}")
         
-        # --- MASTER AGENT POST-TRADE ANALYSIS ---
-        try:
-            print(f"📊 [{symbol}] Running Master Agent post-trade analysis...")
-            
-            # Calculate trade duration
-            opened_at = position.get("opened_at", closed_at)
-            if isinstance(opened_at, str):
-                opened_at = datetime.fromisoformat(opened_at.replace('Z', '+00:00'))
-            
-            duration = closed_at - opened_at
-            duration_hours = duration.total_seconds() / 3600
-            
-            # Calculate P&L percentage
-            entry_price = position["entry_price"]
-            if position["signal"] == "BUY":
-                pnl_pct = ((exit_price - entry_price) / entry_price) * 100
-            else:  # SELL
-                pnl_pct = ((entry_price - exit_price) / entry_price) * 100
-            
-            # Prepare trade data for Master Agent analysis
-            trade_data = {
-                'trade_id': f"{symbol}_{opened_at.strftime('%Y%m%d_%H%M%S')}",
-                'symbol': symbol,
-                'signal': position["signal"],
-                'entry_price': entry_price,
-                'exit_price': exit_price,
-                'pnl': pnl_pct / 100,  # Convert to decimal
-                'pips': pips,
-                'close_reason': reason,
-                'duration_hours': duration_hours,
-                'confidence': position.get("initial_confidence", 0.0),
-                'reasoning': position.get("reasoning", {})
-            }
-            
-            # Run Master Agent post-trade analysis
-            analysis_results = self.master_agent_coordinator.analyze_closed_trade(trade_data)
-            
-            # Send intelligent alert for significant trades
-            if abs(pnl_pct) > 1.0:  # Significant gain/loss > 1%
-                alert_type = 'SUCCESS' if pnl_pct > 0 else 'WARNING'
-                await self.master_agent_coordinator.send_intelligent_alert(
-                    alert_type,
-                    symbol,
-                    f"Trade closed: {pnl_pct:+.2f}% P&L",
-                    {
-                        'entry_price': entry_price,
-                        'exit_price': exit_price,
-                        'duration': f"{duration_hours:.1f} hours",
-                        'close_reason': reason,
-                        'analysis': analysis_results.get('performance_category', 'N/A')
-                    }
-                )
-            
-        except Exception as e:
-            print(f"❌ [Master Agent Post-Trade] Error analyzing {symbol}: {e}")
-        
-        # --- MASTER AGENT RETRAIN CHECK ---
-        try:
-            print(f"🔄 [{symbol}] Running Master Agent retrain check...")
-            retrain_result = self.master_agent_coordinator.request_retrain_check(symbol)
-            
-            if retrain_result.get('retrain_needed', False):
-                print(f"🔄 [{symbol}] Master Agent recommends retraining!")
-                
-                # Send retrain alert
-                await self.master_agent_coordinator.send_intelligent_alert(
-                    'WARNING',
-                    symbol,
-                    "Model retraining recommended by Master Agent",
-                    {
-                        'retrain_score': f"{retrain_result.get('score', 0):.2f}",
-                        'signals': ', '.join(retrain_result.get('signals', [])),
-                        'priority': retrain_result.get('priority', 'MEDIUM')
-                    }
-                )
-                
-                # Trigger actual retraining if AutoRetrainManager is available
-                if hasattr(self, 'auto_retrain_manager') and self.auto_retrain_manager:
-                    try:
-                        self.auto_retrain_manager.trigger_retrain(
-                            symbol, 
-                            f"Master Agent recommendation: {retrain_result.get('signals', [])}"
-                        )
-                    except Exception as e:
-                        print(f"⚠️ [{symbol}] Auto-retrain trigger failed: {e}")
-            
-        except Exception as e:
-            print(f"❌ [Master Agent Retrain Check] Error for {symbol}: {e}")
-        
-        # Check performance after trade (original logic)
+        # Check performance after trade
         try:
             rating, data = self.evaluate_symbol_performance(symbol)
             # Ensure data is a dictionary
@@ -21630,9 +17472,9 @@ class EnhancedTradingBot:
                 'ang used': 'Closing',
                 'vthsau': 'positions',
                 'dtrnh': 'to avoid',
-                'cuối tuần': 'weekend',
+                'cu tu n': 'weekend',
                 'THNG BO': 'NOTICE',
-                'ĐÓNG LỆNH CUỐI TUẦN': 'WEEKEND POSITION CLOSURE'
+                'NG L NH old I TU N': 'WEEKEND POSITION CLOSURE'
             }
             
             for old_text, new_text in replacements.items():
@@ -22317,69 +18159,48 @@ class EnhancedTradingBot:
             print(f"   [Historical SL] {symbol}: Li Check lch s SL: {e}")
             return False
 
-    async def check_emergency_sl_positions(self):
+    def check_emergency_sl_positions(self):
         """
-        Check emergency stop loss positions using Master Agent
-        UPDATED: Now delegates to Master Agent for centralized emergency management
+        Check kh n c p all vthc r i ro cao (g n ch m SL)
         """
         if not self.open_positions:
             return
             
-        print("🚨 [Enhanced Bot - Emergency SL] Delegating to Master Agent for emergency monitoring...")
-        
-        try:
-            # Use Master Agent's enhanced emergency monitoring
-            emergency_actions = await self.master_agent_coordinator.monitor_and_manage_emergency_stops(
-                self.open_positions, 
-                self.data_manager
-            )
-            
-            # Execute emergency actions returned by Master Agent
-            if emergency_actions:
-                for action in emergency_actions:
-                    symbol = action['symbol']
-                    reason = action['reason']
-                    current_price = action['current_price']
-                    
-                    print(f"🚨 [Enhanced Bot - Emergency SL] Executing Master Agent decision: Close {symbol}")
-                    await self.close_position_enhanced(symbol, reason, current_price)
-                    
-                    # Send intelligent alert via Master Agent
-                    await self.master_agent_coordinator.send_intelligent_alert(
-                        'EMERGENCY', 
-                        symbol, 
-                        f"Emergency position closed: {reason}",
-                        {
-                            'current_price': current_price,
-                            'analysis': action.get('analysis', 'N/A')
-                        }
-                    )
-            
-        except Exception as e:
-            print(f"❌ [Enhanced Bot - Emergency SL] Error in Master Agent emergency monitoring: {e}")
-            # Fallback to basic emergency check
-            await self._fallback_emergency_check()
-    
-    async def _fallback_emergency_check(self):
-        """Fallback emergency check if Master Agent fails"""
-        print("⚠️ [Enhanced Bot - Emergency SL] Using fallback emergency check...")
+        print("   [Emergency SL] Check all positions with high risk...")
         
         for symbol, position in list(self.open_positions.items()):
             try:
+                # L y gi real-time
                 current_price = self.data_manager.get_current_price(symbol)
                 if current_price is None:
                     continue
                 
-                # Basic SL check
+                # Tnh kho ng allh dn SL
                 if position["signal"] == "BUY":
-                    if current_price <= position["sl"]:
-                        await self.close_position_enhanced(symbol, "Emergency Stop Loss (Fallback)", current_price)
+                    distance_to_sl = current_price - position["sl"]
+                    sl_percentage = (distance_to_sl / position["entry_price"]) * 100
                 else:  # SELL
-                    if current_price >= position["sl"]:
-                        await self.close_position_enhanced(symbol, "Emergency Stop Loss (Fallback)", current_price)
-                        
+                    distance_to_sl = position["sl"] - current_price
+                    sl_percentage = (distance_to_sl / position["entry_price"]) * 100
+                
+                # if kho ng allh dn SL < 0.5% th Check kh n c p
+                if sl_percentage < 0.5:
+                    print(f"   [Emergency SL] {symbol}: High risk! {sl_percentage:.2f}% remaining to SL")
+                    
+                    # Check l i SL/TP with gi real-time
+                    if position["signal"] == "BUY":
+                        if current_price <= position["sl"]:
+                            print(f"   [Emergency SL] {symbol}: CH M SL KH N C P! {current_price:.5f} <= {position['sl']:.5f}")
+                            emergency_reason = self._analyze_emergency_stop_reason(symbol, position, current_price, "BUY")
+                            self.close_position_enhanced(symbol, f"Emergency Stop Loss: {emergency_reason}", current_price)
+                    else:  # SELL
+                        if current_price >= position["sl"]:
+                            print(f"   [Emergency SL] {symbol}: CH M SL KH N C P! {current_price:.5f} >= {position['sl']:.5f}")
+                            emergency_reason = self._analyze_emergency_stop_reason(symbol, position, current_price, "SELL")
+                            self.close_position_enhanced(symbol, f"Emergency Stop Loss: {emergency_reason}", current_price)
+                            
             except Exception as e:
-                print(f"❌ [Enhanced Bot - Emergency SL] Fallback error for {symbol}: {e}")
+                print(f"   [Emergency SL] Li Check {symbol}: {e}")
                 continue
     
     def _analyze_emergency_stop_reason(self, symbol, position, current_price, signal_direction):
@@ -22695,21 +18516,21 @@ class EnhancedTradingBot:
                     positions_to_close.append(symbol)
 
             if not positions_to_close:
-                print("[Weekend Close] Không có lệnh nào cần đóng cho cuối tuần.")
+                print("[Weekendlose] not c l receiveo needs used vo cu tu n.")
                 return
 
             alert_message = "🚨 **[NOTICE] WEEKEND POSITION CLOSURE**\n"
             alert_message += "Closing all non-crypto positions for weekend risk management:\n"
 
-            print(f"[Weekend Close] Đang đóng {len(positions_to_close)} vị thế ...")
+            print(f"[Weekendlose] ang used {len(positions_to_close)} vth ...")
 
             closed_count = 0
             for symbol in positions_to_close:
                 current_price = self.data_manager.get_current_price(symbol)
                 if current_price:
-                    reason = "đóng lệnh cuối tuần"
+                    reason = "ng l nh tused cu tu n"
                     signal = self.open_positions[symbol]['signal']
-                    alert_message += f"- Đóng {signal} **{symbol}** @ `{current_price:.5f}`\n"
+                    alert_message += f"-  used {signal} **{symbol}** @ `{current_price:.5f}`\n"
                     self.close_position_enhanced(symbol, reason, current_price)
                     closed_count += 1
 
@@ -22718,27 +18539,27 @@ class EnhancedTradingBot:
 
     def check_and_execute_weekend_close(self):
             """
-            Kiểm tra và thực hiện đóng lệnh cuối tuần cho các vị thế nếu cần.
+            Check xelevel must thi dim used l nh cu tu n not v t hnh dng if needs.
             """
             if not WEEKEND_CLOSE_CONFIG["ENABLED"]:
                 return
 
             now_utc = datetime.utcnow()
 
-            # Reset cờ vào ngày Thứ 2
+            # Reset cvo ngy Th2
             if now_utc.weekday() == 0 and self.weekend_close_executed:
-                print("[Weekend Close] Reset cờ đóng lệnh cho tuần mới.")
+                print("[Weekendlose] Reset cused l nh cho tu n mi.")
                 self.weekend_close_executed = False
 
-            # Kiểm tra điều kiện đóng lệnh
+            # Check conditions used l nh
             is_close_day = (now_utc.weekday() == WEEKEND_CLOSE_CONFIG["CLOSE_DAY_UTC"])
             is_past_close_time = (now_utc.hour >= WEEKEND_CLOSE_CONFIG["CLOSE_HOUR_UTC"] and
                                   now_utc.minute >= WEEKEND_CLOSE_CONFIG["CLOSE_MINUTE_UTC"])
 
             if is_close_day and is_past_close_time and not self.weekend_close_executed:
-                print("[Weekend Close] Đến thời điểm đóng lệnh cuối tuần!")
+                print("[Weekendlose]  dn thi dim used l nh cu tu n!")
                 self.close_all_non_crypto_positions_for_weekend()
-                self.weekend_close_executed = True # đánh dấu đã thực hiện đóng lệnh
+                self.weekend_close_executed = True # nhn d liu d thc hin d lߦ+p lߦi
     def update_trailing_stop(self, symbol, current_price):
         """
         DEPRECATED: This method is no longer used. 
@@ -22876,20 +18697,6 @@ class EnhancedTradingBot:
         }
         self.send_discord_alert(" **Advanced Bot Started Successfully!**", "SUCCESS", "NORMAL", startup_data)
 
-        # Khởi động real-time monitoring cho các vị thế hiện có
-        if hasattr(self, 'realtime_monitor') and self.realtime_monitor:
-            if self.open_positions:
-                self.realtime_monitor.start_monitoring(self.open_positions)
-                print(f"🔄 [Real-time Monitor] Started monitoring {len(self.open_positions)} existing positions")
-            else:
-                print("🔄 [Real-time Monitor] No existing positions to monitor")
-        else:
-            print("❌ [Real-time Monitor] Not initialized")
-            print(f"   - Check initialization logs above for details")
-        
-        # Hiển thị trạng thái real-time monitoring
-        self.display_realtime_monitoring_status()
-
         while True:
             try:
                 # Execute main bot cycle
@@ -22899,12 +18706,6 @@ class EnhancedTradingBot:
             except KeyboardInterrupt:
                 logger.info("Bot stopped by user")
                 print("\n Bot d duc dng bi ngui dng.")
-                
-                # Dừng real-time monitoring
-                if hasattr(self, 'realtime_monitor') and self.realtime_monitor:
-                    self.realtime_monitor.stop_monitoring()
-                    print("🔄 [Real-time Monitor] Monitoring stopped")
-                
                 self.send_discord_alert(" **Bot Stopped by User**", "INFO", "NORMAL")
                 if self.conn: 
                     self.conn.close()
@@ -22939,10 +18740,7 @@ class EnhancedTradingBot:
         # 5. Position management
         await self._handle_position_management(live_data_cache)
         
-        # 5.1. Real-time monitoring health check
-        await self._check_realtime_monitoring_health()
-        
-        # 5.2. Master Agent trailing stop management (ONLY system for trailing stops)
+        # 5.1. Master Agent trailing stop management (ONLY system for trailing stops)
         self._apply_master_agent_trailing_stops()
         
         # 6. Trading strategy execution
@@ -22968,23 +18766,9 @@ class EnhancedTradingBot:
     async def _handle_timing_logic(self, is_first_run):
         """Handle timing logic for bot execution"""
         if not is_first_run:
-            # Check the configured cycle mode
-            cycle_mode = globals().get('BOT_CYCLE_MODE', 'HOURLY')
-            
-            if cycle_mode == "HOURLY":
-                await self.wait_until_top_of_the_hour()
-            elif cycle_mode == "CONTINUOUS":
-                print("🔄 Continuous mode: Starting next cycle immediately...")
-                # No wait - continue immediately
-            elif cycle_mode == "CUSTOM":
-                interval = globals().get('BOT_CYCLE_INTERVAL', 3600)
-                print(f"⏱️ Custom interval mode: Waiting {interval} seconds before next cycle...")
-                await asyncio.sleep(interval)
-            else:
-                # Default to hourly
-                await self.wait_until_top_of_the_hour()
+            await self.wait_until_top_of_the_hour()
         else:
-            print("🚀 Performing initial analysis run immediately...")
+            print(" Performing initial analysis run immediately...")
 
         current_time_vn = datetime.now(pytz.timezone("Asia/Bangkok"))
         print(f"\n----- Analysis cycle: {current_time_vn.strftime('%Y-%m-%d %H:%M:%S')} (VN) -----")
@@ -23073,10 +18857,10 @@ class EnhancedTradingBot:
 
     def _display_portfolio_summary(self):
         """Display portfolio summary"""
-        print("\n----- TỔNG KẾT DANH MỤC -----")
+        print("\n----- TNG KT portfolio -----")
         for symbol, pos in self.open_positions.items():
             print(f"   - {symbol}: {pos['signal']} @ {pos['entry_price']:.5f}")
-        print(f"   - Tổng vị thế: {len(self.open_positions)}/{RISK_MANAGEMENT['MAX_OPEN_POSITIONS']}")
+        print(f"   - Tng v th : {len(self.open_positions)}/{RISK_MANAGEMENT['MAX_OPEN_POSITIONS']}")
     
     # === MASTER AGENT INTEGRATION METHODS ===
     
@@ -23154,524 +18938,120 @@ class EnhancedTradingBot:
             }
     
     def _apply_master_agent_trailing_stops(self):
-        """🎯 Master Agent Trailing Stop System - Automatically monitors and activates trailing stops for ALL symbols"""
+        """Apply Master Agent trailing stop logic to open positions - ONLY SYSTEM FOR TRAILING STOPS"""
         try:
             if not self.open_positions:
                 return
             
-            print("🎯 [Master Agent Trailing Stop] Analyzing ALL open positions for trailing stop opportunities...")
-            print(f"   📊 Processing {len(self.open_positions)} open positions with ENHANCED Master Agent system")
-            
-            trailing_activations = []
+            print("🎯 [Master Agent Integration] Checking trailing stops for open positions...")
+            print(f"   [Master Agent] Processing {len(self.open_positions)} open positions with MASTER AGENT ONLY")
             
             for symbol, position in self.open_positions.items():
                 try:
-                    # Skip if already has trailing stop active
-                    if position.get('trailing_stop', False):
-                        continue
-                    
                     # Get current market data
                     current_data = self.data_manager.fetch_multi_timeframe_data(symbol, count=100)
                     if not current_data:
-                        print(f"⚠️ [Master Agent] No market data for {symbol}")
                         continue
                     
                     primary_tf = PRIMARY_TIMEFRAME_BY_SYMBOL.get(symbol, PRIMARY_TIMEFRAME)
                     df = current_data.get(primary_tf)
                     if df is None or df.empty:
-                        print(f"⚠️ [Master Agent] Empty data for {symbol} on {primary_tf}")
                         continue
                     
                     current_price = df['close'].iloc[-1]
                     entry_price = position.get('entry_price', current_price)
                     direction = position.get('signal', 'BUY')
                     
-                    # Calculate current profit for quick check
-                    if direction.upper() == 'BUY':
-                        profit_pct = (current_price - entry_price) / entry_price
-                    else:
-                        profit_pct = (entry_price - current_price) / entry_price
+                    # Prepare market data for Master Agent
+                    market_data = {'price_data': df}
                     
-                    print(f"📈 [Master Agent] {symbol}: Current profit {profit_pct:.2%} ({'✅ Above threshold' if profit_pct > 0.015 else '⏳ Below threshold'})")
-                    
-                    # Prepare comprehensive market data for Master Agent
-                    market_data = {
-                        'price_data': df,
-                        'symbol': symbol,
-                        'timeframe': primary_tf,
-                        'multi_tf_data': current_data
-                    }
-                    
-                    # Get comprehensive trailing stop decision from Master Agent
-                    trailing_decision = self._get_enhanced_master_agent_trailing_decision(
-                        symbol, current_price, entry_price, direction, market_data, position
+                    # Get trailing stop decision from Master Agent
+                    trailing_decision = self._get_master_agent_trailing_decision(
+                        symbol, current_price, entry_price, direction, market_data
                     )
                     
-                    # Apply trailing stop if recommended by Master Agent
+                    # Apply trailing stop if recommended
                     if trailing_decision['should_activate']:
-                        activation_info = self._activate_trailing_stop_for_position(
-                            symbol, position, current_price, entry_price, direction, trailing_decision
+                        print(f"✅ [Master Agent] Activating trailing stop for {symbol}")
+                        print(f"   Current Price: {current_price:.5f}")
+                        print(f"   Profit: {trailing_decision['current_profit_pct']:.2%}")
+                        print(f"   Trailing Distance: {trailing_decision['recommended_distance']:.5f}")
+                        
+                        # Calculate TP progress for console display
+                        tp_target_console = position.get('tp', 0)
+                        tp_progress_console = 0
+                        if tp_target_console > 0:
+                            if direction.upper() == 'BUY':
+                                total_dist = tp_target_console - entry_price
+                                current_dist = current_price - entry_price
+                            else:
+                                total_dist = entry_price - tp_target_console
+                                current_dist = entry_price - current_price
+                            if total_dist != 0:
+                                tp_progress_console = max(0, min(100, (current_dist / total_dist) * 100))
+                        print(f"   Progress to TP: {tp_progress_console:.1f}%")
+                        
+                        # Update position with trailing stop
+                        position['trailing_stop'] = True
+                        position['trailing_distance'] = trailing_decision['recommended_distance']
+                        position['trailing_stop_price'] = self._calculate_trailing_stop_price(
+                            current_price, direction, trailing_decision['recommended_distance']
                         )
                         
-                        if activation_info:
-                            trailing_activations.append(activation_info)
-                            print(f"✅ [Master Agent] Trailing stop ACTIVATED for {symbol}")
+                        # Show SL range information in console after calculation
+                        original_sl_console = position.get('initial_sl', position.get('sl', 0))
+                        print(f"   SL Range: {original_sl_console:.5f} → {position['trailing_stop_price']:.5f}")
+                        
+                        # Save updated position
+                        save_open_positions(self.open_positions)
+                        
+                        # Calculate SL range information for notification
+                        original_sl = position.get('initial_sl', position.get('sl', 0))
+                        new_trailing_sl = position['trailing_stop_price']
+                        
+                        # Calculate progress towards Take Profit target
+                        tp_target = position.get('tp', 0)
+                        tp_progress_pct = 0
+                        
+                        if tp_target > 0:
+                            if direction.upper() == 'BUY':
+                                # For BUY: progress = (current_price - entry_price) / (tp_target - entry_price)
+                                total_distance_to_tp = tp_target - entry_price
+                                current_distance = current_price - entry_price
+                            else:  # SELL
+                                # For SELL: progress = (entry_price - current_price) / (entry_price - tp_target)
+                                total_distance_to_tp = entry_price - tp_target
+                                current_distance = entry_price - current_price
+                            
+                            if total_distance_to_tp != 0:
+                                tp_progress_pct = (current_distance / total_distance_to_tp) * 100
+                                tp_progress_pct = max(0, min(100, tp_progress_pct))  # Clamp between 0-100%
+                        
+                        # Format SL values appropriately based on symbol (remove decimals for crypto like BTC)
+                        if symbol.startswith('BTC') or symbol.startswith('ETH') or 'USD' in symbol:
+                            original_sl_formatted = f"{original_sl:.0f}"
+                            new_trailing_sl_formatted = f"{new_trailing_sl:.0f}"
                         else:
-                            print(f"❌ [Master Agent] Failed to activate trailing stop for {symbol}")
-                    else:
-                        print(f"⏳ [Master Agent] Trailing stop NOT activated for {symbol}: {', '.join(trailing_decision['reasons'])}")
+                            original_sl_formatted = f"{original_sl:.5f}"
+                            new_trailing_sl_formatted = f"{new_trailing_sl:.5f}"
+                        
+                        # Send notification
+                        self.send_discord_alert(
+                            f"🎯 **Master Agent Trailing Stop Activated**\n\n"
+                            f"**Symbol:** {symbol}\n"
+                            f"**Direction:** {direction}\n"
+                            f"**Current Profit:** {trailing_decision['current_profit_pct']:.2%} ({tp_progress_pct:.1f}% to TP)\n"
+                            f"**Trailing Distance:** {trailing_decision['recommended_distance']:.5f}\n"
+                            f"**SL Range:** {original_sl_formatted} → {new_trailing_sl_formatted}\n"
+                            f"**Reasons:** {', '.join(trailing_decision['reasons'])}"
+                        )
                     
                 except Exception as e:
-                    print(f"❌ [Master Agent] Error processing {symbol}: {e}")
+                    print(f"❌ [Master Agent] Error processing trailing stop for {symbol}: {e}")
                     continue
             
-            # Send summary notification if any trailing stops were activated
-            if trailing_activations:
-                self._send_trailing_stop_summary_notification(trailing_activations)
-                self._log_trailing_stop_activations(trailing_activations)
-                print(f"🎯 [Master Agent] Successfully activated {len(trailing_activations)} trailing stops")
-            else:
-                print("⏳ [Master Agent] No trailing stops activated in this cycle")
-                self._log_trailing_stop_analysis_summary()
-            
         except Exception as e:
-            print(f"❌ [Master Agent Integration] Critical error in trailing stop system: {e}")
-            logging.error(f"Master Agent trailing stop system error: {e}")
-
-    def _get_enhanced_master_agent_trailing_decision(self, symbol, current_price, entry_price, direction, market_data, position):
-        """Enhanced Master Agent decision system for trailing stops with comprehensive analysis"""
-        try:
-            print(f"🧠 [Master Agent] Deep analysis for {symbol} trailing stop decision...")
-            
-            # Use the existing Master Agent decision system
-            base_decision = self._get_master_agent_trailing_decision(
-                symbol, current_price, entry_price, direction, market_data
-            )
-            
-            # Enhanced factors specific to this implementation
-            enhanced_factors = self._calculate_enhanced_trailing_factors(
-                symbol, current_price, entry_price, direction, market_data, position
-            )
-            
-            # Combine decisions with enhanced logic
-            final_decision = self._combine_trailing_decisions(base_decision, enhanced_factors, symbol)
-            
-            return final_decision
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error in enhanced trailing decision for {symbol}: {e}")
-            return {
-                'should_activate': False,
-                'reasons': ['Analysis error'],
-                'current_profit_pct': 0,
-                'recommended_distance': current_price * 0.01,
-                'confidence': 0.1
-            }
-
-    def _calculate_enhanced_trailing_factors(self, symbol, current_price, entry_price, direction, market_data, position):
-        """Calculate additional factors for trailing stop decision"""
-        try:
-            df = market_data.get('price_data')
-            factors = {}
-            
-            # 1. Position age factor (older positions more likely to trail)
-            entry_time = position.get('entry_time', datetime.now())
-            if isinstance(entry_time, str):
-                entry_time = datetime.fromisoformat(entry_time.replace('Z', '+00:00'))
-            position_age_hours = (datetime.now() - entry_time).total_seconds() / 3600
-            factors['position_age_score'] = min(1.0, position_age_hours / 24)  # Max score after 24 hours
-            
-            # 2. Volatility adaptation
-            atr = df['close'].rolling(14).apply(lambda x: np.mean(np.abs(np.diff(x)))).iloc[-1]
-            atr_pct = (atr / current_price) * 100
-            factors['volatility_adapted'] = atr_pct > 0.5  # Higher volatility = more suitable for trailing
-            
-            # 3. Trend consistency
-            sma_20 = df['close'].rolling(20).mean().iloc[-1]
-            sma_50 = df['close'].rolling(50).mean().iloc[-1] if len(df) >= 50 else sma_20
-            trend_alignment = (current_price > sma_20 > sma_50) if direction.upper() == 'BUY' else (current_price < sma_20 < sma_50)
-            factors['trend_consistency'] = trend_alignment
-            
-            # 4. Recent momentum
-            recent_returns = df['close'].pct_change().tail(5).mean()
-            momentum_favorable = (recent_returns > 0) if direction.upper() == 'BUY' else (recent_returns < 0)
-            factors['momentum_favorable'] = momentum_favorable
-            
-            # 5. Symbol-specific thresholds
-            symbol_config = ENTRY_TP_SL_CONFIG.get(symbol, {})
-            min_profit_threshold = symbol_config.get('min_trailing_profit', 0.015)  # Default 1.5%
-            
-            if direction.upper() == 'BUY':
-                current_profit_pct = (current_price - entry_price) / entry_price
-            else:
-                current_profit_pct = (entry_price - current_price) / entry_price
-                
-            factors['meets_symbol_threshold'] = current_profit_pct >= min_profit_threshold
-            factors['current_profit_pct'] = current_profit_pct
-            
-            return factors
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error calculating enhanced factors for {symbol}: {e}")
-            return {'error': str(e)}
-
-    def _combine_trailing_decisions(self, base_decision, enhanced_factors, symbol):
-        """Combine base Master Agent decision with enhanced factors"""
-        try:
-            # Start with base decision
-            should_activate = base_decision.get('should_activate', False)
-            reasons = list(base_decision.get('reasons', []))
-            confidence = base_decision.get('confidence', 0.5)
-            
-            # Apply enhanced factors
-            if enhanced_factors.get('error'):
-                return base_decision
-            
-            enhancement_score = 0
-            max_enhancements = 5
-            
-            # Factor 1: Position age
-            if enhanced_factors.get('position_age_score', 0) > 0.3:
-                enhancement_score += 1
-                reasons.append("Position matured for trailing")
-            
-            # Factor 2: Volatility
-            if enhanced_factors.get('volatility_adapted', False):
-                enhancement_score += 1
-                reasons.append("Volatility favorable for trailing")
-            
-            # Factor 3: Trend consistency
-            if enhanced_factors.get('trend_consistency', False):
-                enhancement_score += 1
-                reasons.append("Strong trend alignment")
-            
-            # Factor 4: Momentum
-            if enhanced_factors.get('momentum_favorable', False):
-                enhancement_score += 1
-                reasons.append("Recent momentum supports direction")
-            
-            # Factor 5: Symbol threshold
-            if enhanced_factors.get('meets_symbol_threshold', False):
-                enhancement_score += 1
-                reasons.append("Meets symbol-specific profit threshold")
-            
-            # Enhanced decision logic
-            enhancement_ratio = enhancement_score / max_enhancements
-            
-            # If base decision was positive, enhance confidence
-            if should_activate and enhancement_ratio >= 0.4:
-                confidence = min(0.95, confidence + (enhancement_ratio * 0.2))
-                reasons.append("Enhanced confidence via multiple factors")
-            
-            # If base decision was negative but enhancements are strong, override
-            elif not should_activate and enhancement_ratio >= 0.6 and enhanced_factors.get('meets_symbol_threshold', False):
-                should_activate = True
-                confidence = 0.7
-                reasons = ["Override: Strong enhancement factors"] + reasons[-3:]  # Keep last 3 reasons
-            
-            return {
-                'should_activate': should_activate,
-                'reasons': reasons,
-                'current_profit_pct': enhanced_factors.get('current_profit_pct', 0),
-                'recommended_distance': base_decision.get('recommended_distance', 0),
-                'confidence': confidence,
-                'enhancement_score': enhancement_score,
-                'enhancement_ratio': enhancement_ratio
-            }
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error combining decisions for {symbol}: {e}")
-            return base_decision
-
-    def _activate_trailing_stop_for_position(self, symbol, position, current_price, entry_price, direction, trailing_decision):
-        """Activate trailing stop for a specific position with comprehensive tracking"""
-        try:
-            print(f"🎯 [Master Agent] Activating trailing stop for {symbol}...")
-            
-            # Calculate TP progress for display
-            tp_target = position.get('tp', 0)
-            tp_progress_pct = 0
-            
-            if tp_target > 0:
-                if direction.upper() == 'BUY':
-                    total_distance_to_tp = tp_target - entry_price
-                    current_distance = current_price - entry_price
-                else:
-                    total_distance_to_tp = entry_price - tp_target
-                    current_distance = entry_price - current_price
-                
-                if total_distance_to_tp != 0:
-                    tp_progress_pct = max(0, min(100, (current_distance / total_distance_to_tp) * 100))
-            
-            # Update position with trailing stop information
-            position['trailing_stop'] = True
-            position['trailing_distance'] = trailing_decision['recommended_distance']
-            position['trailing_stop_price'] = self._calculate_trailing_stop_price(
-                current_price, direction, trailing_decision['recommended_distance']
-            )
-            position['trailing_activated_at'] = datetime.now().isoformat()
-            position['trailing_activation_price'] = current_price
-            position['trailing_confidence'] = trailing_decision.get('confidence', 0.5)
-            
-            # Store original SL for comparison
-            original_sl = position.get('initial_sl', position.get('sl', 0))
-            if not position.get('initial_sl'):
-                position['initial_sl'] = original_sl
-            
-            # Update the actual stop loss to the trailing stop price
-            position['sl'] = position['trailing_stop_price']
-            
-            # Save updated positions
-            save_open_positions(self.open_positions)
-            
-            # Format values for display
-            if symbol.startswith('BTC') or symbol.startswith('ETH') or 'USD' in symbol:
-                original_sl_formatted = f"{original_sl:.0f}"
-                new_trailing_sl_formatted = f"{position['trailing_stop_price']:.0f}"
-                trailing_distance_formatted = f"{trailing_decision['recommended_distance']:.0f}"
-            else:
-                original_sl_formatted = f"{original_sl:.5f}"
-                new_trailing_sl_formatted = f"{position['trailing_stop_price']:.5f}"
-                trailing_distance_formatted = f"{trailing_decision['recommended_distance']:.5f}"
-            
-            # Console output
-            print(f"   💰 Current Price: {current_price:.5f}")
-            print(f"   📈 Profit: {trailing_decision['current_profit_pct']:.2%} ({tp_progress_pct:.1f}% to TP)")
-            print(f"   📏 Trailing Distance: {trailing_distance_formatted}")
-            print(f"   🎯 SL Range: {original_sl_formatted} → {new_trailing_sl_formatted}")
-            print(f"   🔍 Confidence: {trailing_decision.get('confidence', 0.5):.1%}")
-            print(f"   ✅ Reasons: {', '.join(trailing_decision['reasons'])}")
-            
-            # Return activation info for summary
-            return {
-                'symbol': symbol,
-                'direction': direction,
-                'current_profit_pct': trailing_decision['current_profit_pct'],
-                'tp_progress_pct': tp_progress_pct,
-                'trailing_distance': trailing_decision['recommended_distance'],
-                'sl_range': f"{original_sl_formatted} → {new_trailing_sl_formatted}",
-                'reasons': trailing_decision['reasons'],
-                'confidence': trailing_decision.get('confidence', 0.5),
-                'current_price': current_price
-            }
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error activating trailing stop for {symbol}: {e}")
-            return None
-
-    def _send_trailing_stop_summary_notification(self, activations):
-        """Send comprehensive summary of all trailing stop activations"""
-        try:
-            if not activations:
-                return
-            
-            # Create detailed summary message
-            message = f"🎯 **Master Agent Trailing Stop Activated**\n\n"
-            message += f"📊 **Activated {len(activations)} trailing stop{'s' if len(activations) > 1 else ''}:**\n\n"
-            
-            for i, activation in enumerate(activations, 1):
-                message += f"**{i}. {activation['symbol']}**\n"
-                message += f"**Direction:** {activation['direction']}\n"
-                message += f"**Current Profit:** {activation['current_profit_pct']:.2%} ({activation['tp_progress_pct']:.1f}% to TP)\n"
-                message += f"**Trailing Distance:** {activation['trailing_distance']:.5f}\n"
-                message += f"**SL Range:** {activation['sl_range']}\n"
-                message += f"**Confidence:** {activation['confidence']:.1%}\n"
-                message += f"**Reasons:** {', '.join(activation['reasons'][:2])}\n\n"  # Show top 2 reasons
-            
-            # Add summary statistics
-            avg_profit = sum(a['current_profit_pct'] for a in activations) / len(activations)
-            avg_confidence = sum(a['confidence'] for a in activations) / len(activations)
-            
-            message += f"📈 **Summary:**\n"
-            message += f"Average Profit: {avg_profit:.2%}\n"
-            message += f"Average Confidence: {avg_confidence:.1%}\n"
-            message += f"🤖 Master Agent System Active"
-            
-            # Send the notification
-            self.send_discord_alert(message)
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error sending summary notification: {e}")
-            # Send individual notifications as fallback
-            for activation in activations:
-                try:
-                    self.send_discord_alert(
-                        f"🎯 **Master Agent Trailing Stop Activated**\n\n"
-                        f"**Symbol:** {activation['symbol']}\n"
-                        f"**Direction:** {activation['direction']}\n"
-                        f"**Current Profit:** {activation['current_profit_pct']:.2%} ({activation['tp_progress_pct']:.1f}% to TP)\n"
-                        f"**Trailing Distance:** {activation['trailing_distance']:.5f}\n"
-                        f"**SL Range:** {activation['sl_range']}\n"
-                        f"**Reasons:** {', '.join(activation['reasons'][:3])}"
-                    )
-                except:
-                    continue
-
-    def _log_trailing_stop_activations(self, activations):
-        """Log comprehensive trailing stop activation details"""
-        try:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Log to main log file
-            logging.info(f"🎯 [Master Agent Trailing] {len(activations)} trailing stops activated at {timestamp}")
-            
-            for activation in activations:
-                logging.info(
-                    f"   {activation['symbol']}: {activation['direction']} | "
-                    f"Profit: {activation['current_profit_pct']:.2%} | "
-                    f"Distance: {activation['trailing_distance']:.5f} | "
-                    f"SL: {activation['sl_range']} | "
-                    f"Confidence: {activation['confidence']:.1%}"
-                )
-            
-            # Create detailed log entry for analysis
-            log_entry = {
-                'timestamp': timestamp,
-                'event_type': 'trailing_stop_activation',
-                'activations': activations,
-                'total_count': len(activations),
-                'avg_profit': sum(a['current_profit_pct'] for a in activations) / len(activations),
-                'avg_confidence': sum(a['confidence'] for a in activations) / len(activations)
-            }
-            
-            # Store in memory for performance tracking
-            if not hasattr(self, 'trailing_stop_history'):
-                self.trailing_stop_history = []
-            
-            self.trailing_stop_history.append(log_entry)
-            
-            # Keep only last 100 entries to manage memory
-            if len(self.trailing_stop_history) > 100:
-                self.trailing_stop_history = self.trailing_stop_history[-100:]
-                
-            print(f"📝 [Master Agent] Logged {len(activations)} trailing stop activations")
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error logging trailing stop activations: {e}")
-
-    def _log_trailing_stop_analysis_summary(self):
-        """Log summary when no trailing stops are activated"""
-        try:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            if not self.open_positions:
-                logging.info(f"⏳ [Master Agent Trailing] No open positions to analyze at {timestamp}")
-                return
-            
-            # Analyze why no trailing stops were activated
-            analysis_summary = {
-                'total_positions': len(self.open_positions),
-                'positions_with_trailing': sum(1 for pos in self.open_positions.values() if pos.get('trailing_stop', False)),
-                'positions_analyzed': 0,
-                'profit_threshold_failures': 0
-            }
-            
-            for symbol, position in self.open_positions.items():
-                if position.get('trailing_stop', False):
-                    continue  # Skip positions that already have trailing
-                    
-                analysis_summary['positions_analyzed'] += 1
-                
-                # Quick analysis of why trailing wasn't activated
-                entry_price = position.get('entry_price', 0)
-                direction = position.get('signal', 'BUY')
-                
-                if entry_price > 0:
-                    # Simulate current price check (simplified)
-                    try:
-                        current_data = self.data_manager.fetch_multi_timeframe_data(symbol, count=5)
-                        if current_data:
-                            primary_tf = PRIMARY_TIMEFRAME_BY_SYMBOL.get(symbol, PRIMARY_TIMEFRAME)
-                            df = current_data.get(primary_tf)
-                            if df is not None and not df.empty:
-                                current_price = df['close'].iloc[-1]
-                                
-                                if direction.upper() == 'BUY':
-                                    profit_pct = (current_price - entry_price) / entry_price
-                                else:
-                                    profit_pct = (entry_price - current_price) / entry_price
-                                
-                                symbol_config = ENTRY_TP_SL_CONFIG.get(symbol, {})
-                                min_profit_threshold = symbol_config.get('min_trailing_profit', 0.015)
-                                
-                                if profit_pct < min_profit_threshold:
-                                    analysis_summary['profit_threshold_failures'] += 1
-                    except:
-                        pass
-            
-            logging.info(
-                f"⏳ [Master Agent Trailing] Analysis summary at {timestamp}: "
-                f"{analysis_summary['positions_analyzed']} positions analyzed, "
-                f"{analysis_summary['profit_threshold_failures']} below profit threshold, "
-                f"{analysis_summary['positions_with_trailing']} already have trailing"
-            )
-            
-            print(f"📊 [Master Agent] Analysis complete: {analysis_summary['positions_analyzed']} positions checked")
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error logging analysis summary: {e}")
-
-    def get_trailing_stop_performance_stats(self):
-        """Get comprehensive trailing stop performance statistics"""
-        try:
-            if not hasattr(self, 'trailing_stop_history') or not self.trailing_stop_history:
-                return {
-                    'total_activations': 0,
-                    'avg_profit_at_activation': 0,
-                    'avg_confidence': 0,
-                    'symbols_analysis': {},
-                    'recent_activity': 'No trailing stop history available'
-                }
-            
-            # Calculate comprehensive statistics
-            total_activations = sum(entry['total_count'] for entry in self.trailing_stop_history)
-            
-            all_activations = []
-            for entry in self.trailing_stop_history:
-                all_activations.extend(entry['activations'])
-            
-            if not all_activations:
-                return {'total_activations': 0, 'message': 'No activation data available'}
-            
-            # Symbol-wise analysis
-            symbol_stats = {}
-            for activation in all_activations:
-                symbol = activation['symbol']
-                if symbol not in symbol_stats:
-                    symbol_stats[symbol] = {
-                        'count': 0,
-                        'avg_profit': 0,
-                        'avg_confidence': 0,
-                        'profits': [],
-                        'confidences': []
-                    }
-                
-                symbol_stats[symbol]['count'] += 1
-                symbol_stats[symbol]['profits'].append(activation['current_profit_pct'])
-                symbol_stats[symbol]['confidences'].append(activation['confidence'])
-            
-            # Calculate averages for each symbol
-            for symbol, stats in symbol_stats.items():
-                stats['avg_profit'] = sum(stats['profits']) / len(stats['profits'])
-                stats['avg_confidence'] = sum(stats['confidences']) / len(stats['confidences'])
-                del stats['profits']  # Clean up raw data
-                del stats['confidences']
-            
-            recent_entry = self.trailing_stop_history[-1] if self.trailing_stop_history else None
-            
-            return {
-                'total_activations': total_activations,
-                'total_sessions': len(self.trailing_stop_history),
-                'avg_profit_at_activation': sum(a['current_profit_pct'] for a in all_activations) / len(all_activations),
-                'avg_confidence': sum(a['confidence'] for a in all_activations) / len(all_activations),
-                'symbols_analysis': symbol_stats,
-                'recent_activity': recent_entry['timestamp'] if recent_entry else 'No recent activity',
-                'most_active_symbol': max(symbol_stats.keys(), key=lambda x: symbol_stats[x]['count']) if symbol_stats else 'None'
-            }
-            
-        except Exception as e:
-            print(f"❌ [Master Agent] Error getting performance stats: {e}")
-            return {'error': str(e)}
+            print(f"❌ [Master Agent Integration] Error in trailing stop application: {e}")
     
     def _calculate_trailing_stop_price(self, current_price, direction, trailing_distance):
         """Calculate trailing stop price based on direction and distance"""
@@ -24005,7 +19385,7 @@ Chỉ trả về duy nhất một khối JSON với định dạng sau:
         if wait_seconds <= 0:
             wait_seconds += 3600
 
-        print(f"Đang chờ. Còn {int(wait_seconds // 60)} phút {int(wait_seconds % 60)} giây cho đến {next_hour.strftime('%H:%M:%S')}...")
+        print(f"Đang báo. Còn {int(wait_seconds // 60)} phút {int(wait_seconds % 60)} giây cho đến {next_hour.strftime('%H:%M:%S')}...")
         await asyncio.sleep(wait_seconds)
 class DriftMonitor:
     """
@@ -24590,7 +19970,6 @@ def _place_market_order(symbol: str, side: str, units: int,
     Send marketorder to OANDA v20. If OANDA_ACCOUNT_ID not defined, DRY-RUN logs only.
     """
     import logging
-    
     account_id = globals().get("OANDA_ACCOUNT_ID", None)
     api_key = globals().get("OANDA_API_KEY", None)
     base_url = globals().get("OANDA_URL", "https://api-fxtrade.oanda.com/v3")
@@ -24647,9 +20026,7 @@ def rl_execute_production(model, symbols, observation, features_map, get_balance
       - features_map: dict[symbol] -> {'confidence': float, 'atr': float, ...}
       - get_balance_func: callable -> float
     """
-    import logging
-    import numpy as _np
-    
+    import logging, numpy as _np
     logger = logging.getLogger(logger_name)
 
     action, _ = model.predict(observation, deterministic=bool(rl_deterministic))
@@ -25542,34 +20919,7 @@ class AdvancedEntryTPSLCalculator:
 
     def _calculate_atr_from_data(self, market_data):
         """Calculate ATR from market data if not provided"""
-        try:
-            if market_data is None:
-                return 0.001  # Default ATR
-            
-            # Get price data from market_data
-            price_data = market_data.get('price_data')
-            if price_data is None or len(price_data) < 14:
-                return 0.001  # Default ATR
-            
-            # Calculate ATR with safe window size
-            atr_window = min(14, len(price_data) - 1)
-            if atr_window < 2:
-                return 0.001
-                
-            atr_indicator = AverageTrueRange(
-                price_data["high"], 
-                price_data["low"], 
-                price_data["close"], 
-                window=atr_window
-            )
-            atr_series = atr_indicator.average_true_range().dropna()
-            
-            if len(atr_series) > 0:
-                return atr_series.iloc[-1]
-            else:
-                return 0.001  # Default ATR
-        except Exception as e:
-            print(f"❌ Error calculating ATR from data: {e}")
+        if market_data is None or len(market_data) < 14:
             return 0.001  # Default ATR
 
     def _calculate_entry_confidence(self, symbol, signal, entry_price, technical_data):
@@ -26411,7 +21761,7 @@ class AdvancedFeatureStore:
         query = """
             SELECT timestamp, feature_name, feature_value
             FROM features
-            WHERE symbol = ? AND timeframe = ?
+            WHERE symbol =  AND timeframe = 
         """
         params = [symbol, timeframe]
 
@@ -27015,41 +22365,11 @@ def run_comprehensive_symbol_evaluation():
 # ==============================================================================
 # 4. MAIN EXECUTION BLOCK
 # ==============================================================================
-# REPLACE THE 
-# Bootstrap Configuration Validation
-if BOOTSTRAP_AVAILABLE:
-    print("🔧 [Bootstrap] Validating configuration...")
-    config = ONLINE_LEARNING_BOOTSTRAP_CONFIG
-    
-    if config.get('ENABLE_BOOTSTRAP', False):
-        print(f"✅ [Bootstrap] Enabled with method: {config.get('BOOTSTRAP_METHOD', 'unknown')}")
-        print(f"   - Target samples: {config.get('BOOTSTRAP_SAMPLES', 0)}")
-        print(f"   - Historical lookback: {config.get('HISTORICAL_LOOKBACK', 0)} candles")
-        print(f"   - Parallel processing: {config.get('PARALLEL_BOOTSTRAP', False)}")
-    else:
-        print("⚠️ [Bootstrap] Available but disabled in configuration")
-else:
-    print("⚠️ [Bootstrap] Not available - using standard online learning")
+# REPLACE THE if __name__ == "__main__": BLOCK WITH THIS
 
+# FIND AND REPLACE ALL MAIN EXECUTION (MAIN) IN FILE WITH THIS
 
-
-
-
-# Bootstrap Configuration Validation
-if BOOTSTRAP_AVAILABLE:
-    print("🔧 [Bootstrap] Validating configuration...")
-    config = ONLINE_LEARNING_BOOTSTRAP_CONFIG
-    
-    if config.get('ENABLE_BOOTSTRAP', False):
-        print(f"✅ [Bootstrap] Enabled with method: {config.get('BOOTSTRAP_METHOD', 'unknown')}")
-        print(f"   - Target samples: {config.get('BOOTSTRAP_SAMPLES', 0)}")
-        print(f"   - Historical lookback: {config.get('HISTORICAL_LOOKBACK', 0)} candles")
-        print(f"   - Parallel processing: {config.get('PARALLEL_BOOTSTRAP', False)}")
-    else:
-        print("⚠️ [Bootstrap] Available but disabled in configuration")
-else:
-    print("⚠️ [Bootstrap] Not available - using standard online learning")
-
+# FIND AND REPLACE ALL MAIN EXECUTION IN FILE
 
 if __name__ == "__main__":
     print(" [MAIN] Starting bot initialization...")
@@ -27482,52 +22802,6 @@ def test_bot_after_fix():
         return False
 
 # === AUTO-FIX EXECUTION ===
-    def get_bootstrap_status_report(self):
-        """Get comprehensive bootstrap status report"""
-        if not BOOTSTRAP_AVAILABLE:
-            return {
-                'bootstrap_available': False,
-                'message': 'Bootstrap functionality not loaded'
-            }
-        
-        if hasattr(self.online_learning, 'get_bootstrap_status'):
-            status = self.online_learning.get_bootstrap_status()
-            status['bootstrap_available'] = True
-            return status
-        else:
-            return {
-                'bootstrap_available': True,
-                'message': 'Bootstrap available but not used in current online learning manager'
-            }
-    
-    def print_bootstrap_summary(self):
-        """Print a summary of bootstrap status"""
-        status = self.get_bootstrap_status_report()
-        
-        print("\n📊 BOOTSTRAP STATUS SUMMARY")
-        print("=" * 40)
-        
-        if not status.get('bootstrap_available', False):
-            print("❌ Bootstrap not available")
-            print(f"   Reason: {status.get('message', 'Unknown')}")
-            return
-        
-        if not status.get('bootstrap_history_available', False):
-            print("⚠️ Bootstrap available but not initialized yet")
-            return
-        
-        latest = status.get('latest_initialization', {})
-        overall_stats = latest.get('overall_stats', {})
-        
-        print("✅ Bootstrap Status: Active")
-        print(f"   Total models: {status.get('total_models', 0)}")
-        print(f"   Models with bootstrap: {status.get('models_with_bootstrap', 0)}")
-        print(f"   Last initialization:")
-        print(f"      - Symbols: {overall_stats.get('successful_initializations', 0)}/{overall_stats.get('total_symbols', 0)}")
-        print(f"      - Bootstrap samples: {overall_stats.get('total_bootstrap_samples', 0)}")
-        print(f"      - Success rate: {overall_stats.get('success_rate', 0):.1%}")
-        print(f"      - Avg samples/symbol: {overall_stats.get('average_samples_per_symbol', 0):.1f}")
-
 def run_auto_fix():
     """Ch y auto-fix khi needs thi t"""
     print(" AUTO-FIX DUPLICATE CLASS DEFINITIONS")
@@ -27555,23 +22829,6 @@ def run_auto_fix():
         print(" Manual fix required")
 
 # Run smoke test if this file is executed directly
-
-# Bootstrap Configuration Validation
-if BOOTSTRAP_AVAILABLE:
-    print("🔧 [Bootstrap] Validating configuration...")
-    config = ONLINE_LEARNING_BOOTSTRAP_CONFIG
-    
-    if config.get('ENABLE_BOOTSTRAP', False):
-        print(f"✅ [Bootstrap] Enabled with method: {config.get('BOOTSTRAP_METHOD', 'unknown')}")
-        print(f"   - Target samples: {config.get('BOOTSTRAP_SAMPLES', 0)}")
-        print(f"   - Historical lookback: {config.get('HISTORICAL_LOOKBACK', 0)} candles")
-        print(f"   - Parallel processing: {config.get('PARALLEL_BOOTSTRAP', False)}")
-    else:
-        print("⚠️ [Bootstrap] Available but disabled in configuration")
-else:
-    print("⚠️ [Bootstrap] Not available - using standard online learning")
-
-
 if __name__ == "__main__":
     print(" BOT STARTING...")
     
