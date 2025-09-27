@@ -1579,6 +1579,11 @@ try:
     from online_learning_bootstrap import OnlineLearningBootstrap
     from online_learning_integration import EnhancedOnlineLearningManager, create_enhanced_online_learning_manager
     from production_config import ONLINE_LEARNING_BOOTSTRAP_CONFIG
+
+# Override production config for enhanced logging
+import production_config
+production_config.DEPLOYMENT_CONFIG['DEBUG_MODE'] = True
+production_config.DEPLOYMENT_CONFIG['VERBOSE_LOGGING'] = True
     BOOTSTRAP_AVAILABLE = True
     print("✅ [Bootstrap] Online Learning Bootstrap modules loaded successfully")
 except ImportError as e:
@@ -5464,14 +5469,35 @@ from enhanced_logging_config import (
                 # Convert numpy array to dictionary for River
                 features_for_pred = self._ensure_river_format(features_array.flatten())
                 prediction = model.predict_one(features_for_pred)
+                # Enhanced logging for online learning predictions
+                pred_logger = get_trading_logger('MLPredictor')
+                log_prediction(pred_logger, symbol, {
+                    'direction': 'BUY' if prediction > 0.5 else 'SELL',
+                    'confidence': float(prediction),
+                    'model': 'OnlineLearningModel'
+                })
                 
                 # Convert prediction to decision
                 if prediction > 0.3:
                     decision = "BUY"
                     confidence = min(prediction, 0.9)
+                    # Enhanced logging for signal generation
+                    signal_logger = get_trading_logger('SignalGenerator')
+                    log_signal(signal_logger, symbol, {
+                        'type': 'BUY',
+                        'strength': confidence,
+                        'source': 'OnlineLearningModel'
+                    })
                 elif prediction < -0.3:
                     decision = "SELL"
                     confidence = min(abs(prediction), 0.9)
+                    # Enhanced logging for signal generation
+                    signal_logger = get_trading_logger('SignalGenerator')
+                    log_signal(signal_logger, symbol, {
+                        'type': 'SELL',
+                        'strength': confidence,
+                        'source': 'OnlineLearningModel'
+                    })
                 else:
                     decision = "HOLD"
                     confidence = 0.5
@@ -5480,14 +5506,35 @@ from enhanced_logging_config import (
                 model = self.models[symbol]
                 # Use numpy array directly for sklearn
                 prediction = model.predict(features_array)[0]
+                # Enhanced logging for traditional ML predictions
+                pred_logger = get_trading_logger('MLPredictor')
+                log_prediction(pred_logger, symbol, {
+                    'direction': 'BUY' if prediction > 0.5 else 'SELL',
+                    'confidence': float(prediction),
+                    'model': 'TraditionalMLModel'
+                })
                 
                 # Convert prediction to decision
                 if prediction > 0.5:
                     decision = "BUY"
                     confidence = prediction
+                    # Enhanced logging for signal generation
+                    signal_logger = get_trading_logger('SignalGenerator')
+                    log_signal(signal_logger, symbol, {
+                        'type': 'BUY',
+                        'strength': confidence,
+                        'source': 'TraditionalMLModel'
+                    })
                 elif prediction < 0.5:
                     decision = "SELL"
                     confidence = 1 - prediction
+                    # Enhanced logging for signal generation
+                    signal_logger = get_trading_logger('SignalGenerator')
+                    log_signal(signal_logger, symbol, {
+                        'type': 'SELL',
+                        'strength': confidence,
+                        'source': 'TraditionalMLModel'
+                    })
                 else:
                     decision = "HOLD"
                     confidence = 0.5
@@ -19438,6 +19485,9 @@ class EnhancedTradingBot:
 
             logger.debug(" [RL Strategy] calling RL Agent predict...")
             action, _ = self.portfolio_rl_agent.model.predict(final_live_observation, deterministic=True)
+            # Enhanced logging for RL agent decisions
+            rl_logger = get_trading_logger('RLAgent')
+            rl_logger.debug(f"🎯 [RL] Portfolio action: {action} for {len(symbols_agent_knows)} symbols")
             action_vector = self._decode_actions_to_vector(action, symbols_agent_knows, self.portfolio_rl_agent.model)
             
             logger.info(f" [RL Strategy] Action vector used: {list(zip(symbols_agent_knows, action_vector))}")
@@ -19532,6 +19582,13 @@ class EnhancedTradingBot:
                         master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                             'trading_decision', symbol_data, symbol_to_act
                         )
+                        # Enhanced logging for Master Agent decisions
+                        master_logger = get_trading_logger('MasterAgent')
+                        log_trade_decision(master_logger, symbol_to_act, {
+                            'action': master_decision,
+                            'reasoning': 'Master Agent coordination with specialist agents',
+                            'risk_score': 1.0 - master_confidence
+                        })
                         logger.info(f" [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
                         print(f"   [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
                     except Exception as e:
@@ -19686,6 +19743,13 @@ class EnhancedTradingBot:
                                 master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                                     'trading_decision', df_features, symbol
                                 )
+                                # Enhanced logging for Master Agent decisions
+                                master_logger = get_trading_logger('MasterAgent')
+                                log_trade_decision(master_logger, symbol, {
+                                    'action': master_decision,
+                                    'reasoning': 'Master Agent coordination analysis',
+                                    'risk_score': 1.0 - master_confidence
+                                })
                                 logger.info(f" [Master Agent] Result for {symbol}: {master_decision} (confidence: {master_confidence:.2%})")
                                 print(f"   [Master Agent] Result for {symbol}: {master_decision} (confidence: {master_confidence:.2%})")
                             except Exception as e:
