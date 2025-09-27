@@ -47,14 +47,6 @@ import asyncio
 import copy
 import json
 import logging
-# Enhanced Logging Configuration
-from enhanced_logging_config import (
-    setup_enhanced_logging, get_trading_logger,
-    log_prediction, log_signal, log_confidence, 
-    log_trade_decision, log_entry_execution,
-    ENHANCED_LOGGING_CONFIG
-)
-
 import re
 import sqlite3
 import time
@@ -734,7 +726,7 @@ def setup_detailed_logging() -> Dict[str, logging.Logger]:
             '%(asctime)s | %(levelname)-12s | %(name)-25s | %(message)s'
         )
         console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(logging.INFO)
         
         # File handler with detailed format
         file_handler = logging.FileHandler(
@@ -1579,11 +1571,6 @@ try:
     from online_learning_bootstrap import OnlineLearningBootstrap
     from online_learning_integration import EnhancedOnlineLearningManager, create_enhanced_online_learning_manager
     from production_config import ONLINE_LEARNING_BOOTSTRAP_CONFIG
-
-# Override production config for enhanced logging
-import production_config
-production_config.DEPLOYMENT_CONFIG['DEBUG_MODE'] = True
-production_config.DEPLOYMENT_CONFIG['VERBOSE_LOGGING'] = True
     BOOTSTRAP_AVAILABLE = True
     print("✅ [Bootstrap] Online Learning Bootstrap modules loaded successfully")
 except ImportError as e:
@@ -2520,14 +2507,6 @@ import joblib
 import os
 import json
 import logging
-# Enhanced Logging Configuration
-from enhanced_logging_config import (
-    setup_enhanced_logging, get_trading_logger,
-    log_prediction, log_signal, log_confidence, 
-    log_trade_decision, log_entry_execution,
-    ENHANCED_LOGGING_CONFIG
-)
-
 def validate_dataframe_freshness(
     multi_tf_data,
     primary_tf: str,
@@ -4860,14 +4839,6 @@ class OnlineLearningManager:
             else:
                 # Fallback to standard logging
                 import logging
-# Enhanced Logging Configuration
-from enhanced_logging_config import (
-    setup_enhanced_logging, get_trading_logger,
-    log_prediction, log_signal, log_confidence, 
-    log_trade_decision, log_entry_execution,
-    ENHANCED_LOGGING_CONFIG
-)
-
                 logger = logging.getLogger('OnlineLearningManager')
             
             # Log the message
@@ -5118,14 +5089,7 @@ from enhanced_logging_config import (
         try:
             symbol = feedback_data['symbol']
             final_decision = feedback_data['final_decision']
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) feedback_data['final_confidence']
+            final_confidence = feedback_data['final_confidence']
             decision_consistency = feedback_data.get('decision_consistency', 1.0)  # Default to 1.0 if missing
             
             # T o training sample from feedback
@@ -5301,14 +5265,7 @@ from enhanced_logging_config import (
         """T o target tdecision feedback"""
         try:
             final_decision = feedback_data['final_decision']
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) feedback_data['final_confidence']
+            final_confidence = feedback_data['final_confidence']
             
             # Convert decision to numerical target
             decision_mapping = {
@@ -5469,35 +5426,14 @@ from enhanced_logging_config import (
                 # Convert numpy array to dictionary for River
                 features_for_pred = self._ensure_river_format(features_array.flatten())
                 prediction = model.predict_one(features_for_pred)
-                # Enhanced logging for online learning predictions
-                pred_logger = get_trading_logger('MLPredictor')
-                log_prediction(pred_logger, symbol, {
-                    'direction': 'BUY' if prediction > 0.5 else 'SELL',
-                    'confidence': float(prediction),
-                    'model': 'OnlineLearningModel'
-                })
                 
                 # Convert prediction to decision
                 if prediction > 0.3:
                     decision = "BUY"
                     confidence = min(prediction, 0.9)
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'BUY',
-                        'strength': confidence,
-                        'source': 'OnlineLearningModel'
-                    })
                 elif prediction < -0.3:
                     decision = "SELL"
                     confidence = min(abs(prediction), 0.9)
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'SELL',
-                        'strength': confidence,
-                        'source': 'OnlineLearningModel'
-                    })
                 else:
                     decision = "HOLD"
                     confidence = 0.5
@@ -5506,35 +5442,14 @@ from enhanced_logging_config import (
                 model = self.models[symbol]
                 # Use numpy array directly for sklearn
                 prediction = model.predict(features_array)[0]
-                # Enhanced logging for traditional ML predictions
-                pred_logger = get_trading_logger('MLPredictor')
-                log_prediction(pred_logger, symbol, {
-                    'direction': 'BUY' if prediction > 0.5 else 'SELL',
-                    'confidence': float(prediction),
-                    'model': 'TraditionalMLModel'
-                })
                 
                 # Convert prediction to decision
                 if prediction > 0.5:
                     decision = "BUY"
                     confidence = prediction
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'BUY',
-                        'strength': confidence,
-                        'source': 'TraditionalMLModel'
-                    })
                 elif prediction < 0.5:
                     decision = "SELL"
                     confidence = 1 - prediction
-                    # Enhanced logging for signal generation
-                    signal_logger = get_trading_logger('SignalGenerator')
-                    log_signal(signal_logger, symbol, {
-                        'type': 'SELL',
-                        'strength': confidence,
-                        'source': 'TraditionalMLModel'
-                    })
                 else:
                     decision = "HOLD"
                     confidence = 0.5
@@ -12659,24 +12574,10 @@ class ProductionConfidenceManager:
             
             # Apply the selected calculation method
             method = self.calculation_methods[self.current_method]
-            final_decision, final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) method(symbol, signals)
+            final_decision, final_confidence = method(symbol, signals)
             
             # Apply production adjustments
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) self._apply_production_adjustments(symbol, final_decision, final_confidence, signals)
+            final_confidence = self._apply_production_adjustments(symbol, final_decision, final_confidence, signals)
             
             # Store for learning
             self._store_confidence_data(symbol, signals, final_decision, final_confidence)
@@ -12737,14 +12638,7 @@ class ProductionConfidenceManager:
         final_decision = max(action_confidences.items(), key=lambda x: x[1])
         
         # Apply volatility and risk adjustments
-        final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) self._apply_risk_adjustments(symbol, final_decision[1])
+        final_confidence = self._apply_risk_adjustments(symbol, final_decision[1])
         
         return final_decision[0], final_confidence
     
@@ -12939,14 +12833,7 @@ class ProductionConfidenceManager:
         
         # Find best action
         best_action = max(action_votes.items(), key=lambda x: x[1])
-        final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) best_action[1] / total_weight if total_weight > 0 else 0.5
+        final_confidence = best_action[1] / total_weight if total_weight > 0 else 0.5
         
         return best_action[0], min(0.95, max(0.05, final_confidence))
     
@@ -13879,14 +13766,7 @@ class TransferLearningManager:
                         agent_confidences[subtask_name] = 0.5
             
             # Apply consensus mechanism
-            final_decision, final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) self._apply_consensus_mechanism(
+            final_decision, final_confidence = self._apply_consensus_mechanism(
                 agent_opinions, agent_confidences, symbol
             )
             
@@ -13942,14 +13822,7 @@ class TransferLearningManager:
             # Find decision with highest weighted score
             if weighted_votes:
                 best_decision = max(weighted_votes, key=weighted_votes.get)
-                final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) weighted_votes[best_decision] / total_weight if total_weight > 0 else 0.5
+                final_confidence = weighted_votes[best_decision] / total_weight if total_weight > 0 else 0.5
                 return best_decision, min(final_confidence, 0.95)
             else:
                 return "HOLD", 0.5
@@ -14297,14 +14170,7 @@ class MasterAgent:
                         agent_confidences[subtask_name] = 0.5
             
             # Apply consensus mechanism
-            final_decision, final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) self._apply_consensus_mechanism(
+            final_decision, final_confidence = self._apply_consensus_mechanism(
                 agent_opinions, agent_confidences, symbol
             )
             
@@ -14351,14 +14217,7 @@ class MasterAgent:
             # Find decision with highest weighted score
             if weighted_votes:
                 best_decision = max(weighted_votes, key=weighted_votes.get)
-                final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) weighted_votes[best_decision] / total_weight if total_weight > 0 else 0.5
+                final_confidence = weighted_votes[best_decision] / total_weight if total_weight > 0 else 0.5
                 return best_decision, min(final_confidence, 0.95)
             else:
                 return "HOLD", 0.5
@@ -16524,14 +16383,7 @@ class AdvancedEnsembleManager:
                 prediction_counts[pred] = prediction_counts.get(pred, 0) + 1
             
             final_prediction = max(prediction_counts, key=prediction_counts.get)
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) max(confidences) * 0.8  # Bagging typically reduces confidence
+            final_confidence = max(confidences) * 0.8  # Bagging typically reduces confidence
             
             return final_prediction, final_confidence
             
@@ -16565,24 +16417,10 @@ class AdvancedEnsembleManager:
             
             if total_weight > 0:
                 final_prediction = max(weighted_votes, key=weighted_votes.get)
-                final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) weighted_votes[final_prediction] / total_weight
+                final_confidence = weighted_votes[final_prediction] / total_weight
             else:
                 final_prediction = "HOLD"
-                final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) 0.5
+                final_confidence = 0.5
             
             return final_prediction, final_confidence
             
@@ -16604,14 +16442,7 @@ class AdvancedEnsembleManager:
             
             # Level 2: Meta-learner combines predictions
             meta_model = self.stacking_models['meta_learner']
-            final_prediction, final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) meta_model.predict(
+            final_prediction, final_confidence = meta_model.predict(
                 level1_predictions, level1_confidences, symbol
             )
             
@@ -16640,14 +16471,7 @@ class AdvancedEnsembleManager:
             
             # Final prediction
             final_prediction = max(weighted_votes, key=weighted_votes.get)
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) weighted_votes[final_prediction] / total_weight
+            final_confidence = weighted_votes[final_prediction] / total_weight
             
             return final_prediction, final_confidence
             
@@ -17255,28 +17079,14 @@ class EnhancedTradingBot:
             
             # Select decision with highest weighted vote
             final_decision = max(decisions, key=decisions.get)
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) decisions[final_decision]
+            final_confidence = decisions[final_decision]
             
             # Apply final confidence adjustment based on decision consistency
             consistency_factor = self._calculate_decision_consistency(rl_action, master_action, ensemble_action)
             final_confidence *= consistency_factor
             
             # Clamp final confidence
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) max(0.1, min(0.95, final_confidence))
+            final_confidence = max(0.1, min(0.95, final_confidence))
             
             # Log decision combination with enhanced details
             logger = BOT_LOGGERS['RLStrategy']
@@ -17396,14 +17206,7 @@ class EnhancedTradingBot:
             
             # Select decision with highest weighted vote
             final_decision = max(decisions, key=decisions.get)
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) decisions[final_decision]
+            final_confidence = decisions[final_decision]
             
             # Apply final confidence adjustment based on decision consistency
             consistency_factor = self._calculate_decision_consistency_with_online_learning(
@@ -17412,14 +17215,7 @@ class EnhancedTradingBot:
             final_confidence *= consistency_factor
             
             # Clamp final confidence
-            final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) max(0.1, min(0.95, final_confidence))
+            final_confidence = max(0.1, min(0.95, final_confidence))
             
             # Log decision combination with enhanced details
             logger = BOT_LOGGERS['RLStrategy']
@@ -19485,9 +19281,6 @@ class EnhancedTradingBot:
 
             logger.debug(" [RL Strategy] calling RL Agent predict...")
             action, _ = self.portfolio_rl_agent.model.predict(final_live_observation, deterministic=True)
-            # Enhanced logging for RL agent decisions
-            rl_logger = get_trading_logger('RLAgent')
-            rl_logger.debug(f"🎯 [RL] Portfolio action: {action} for {len(symbols_agent_knows)} symbols")
             action_vector = self._decode_actions_to_vector(action, symbols_agent_knows, self.portfolio_rl_agent.model)
             
             logger.info(f" [RL Strategy] Action vector used: {list(zip(symbols_agent_knows, action_vector))}")
@@ -19582,13 +19375,6 @@ class EnhancedTradingBot:
                         master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                             'trading_decision', symbol_data, symbol_to_act
                         )
-                        # Enhanced logging for Master Agent decisions
-                        master_logger = get_trading_logger('MasterAgent')
-                        log_trade_decision(master_logger, symbol_to_act, {
-                            'action': master_decision,
-                            'reasoning': 'Master Agent coordination with specialist agents',
-                            'risk_score': 1.0 - master_confidence
-                        })
                         logger.info(f" [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
                         print(f"   [Master Agent] ✅ Result for {symbol_to_act}: {master_decision} (confidence: {master_confidence:.2%})")
                     except Exception as e:
@@ -19632,14 +19418,7 @@ class EnhancedTradingBot:
                             adjusted_confidence *= transfer_multiplier
                         
                         # Combine RL, Master Agent, Ensemble, and Online Learning decisions
-                        final_decision, final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) self._combine_all_decisions_with_online_learning(
+                        final_decision, final_confidence = self._combine_all_decisions_with_online_learning(
                             action_name, adjusted_confidence,
                             master_decision, master_confidence,
                             ensemble_decision, ensemble_confidence,
@@ -19682,14 +19461,7 @@ class EnhancedTradingBot:
                         adaptive_threshold = self.production_confidence_manager.get_optimal_threshold(symbol_to_act, action_name)
                         
                         # Combine decisions with equal weighting for HOLD actions
-                        final_decision, final_confidence =
-            # Enhanced logging for confidence
-            conf_logger = get_trading_logger('ConfidenceManager')
-            log_confidence(conf_logger, symbol, {
-                'final': final_confidence,
-                'method': 'production_confidence',
-                'components': {'base': final_confidence}
-            }) self._combine_decisions_unified(
+                        final_decision, final_confidence = self._combine_decisions_unified(
                             action_name, adjusted_confidence,
                             master_decision, master_confidence,
                             ensemble_decision, ensemble_confidence,
@@ -19743,13 +19515,6 @@ class EnhancedTradingBot:
                                 master_decision, master_confidence = self.master_agent_coordinator.coordinate_decision(
                                     'trading_decision', df_features, symbol
                                 )
-                                # Enhanced logging for Master Agent decisions
-                                master_logger = get_trading_logger('MasterAgent')
-                                log_trade_decision(master_logger, symbol, {
-                                    'action': master_decision,
-                                    'reasoning': 'Master Agent coordination analysis',
-                                    'risk_score': 1.0 - master_confidence
-                                })
                                 logger.info(f" [Master Agent] Result for {symbol}: {master_decision} (confidence: {master_confidence:.2%})")
                                 print(f"   [Master Agent] Result for {symbol}: {master_decision} (confidence: {master_confidence:.2%})")
                             except Exception as e:
@@ -24168,14 +23933,6 @@ def _place_market_order(symbol: str, side: str, units: int,
     Send marketorder to OANDA v20. If OANDA_ACCOUNT_ID not defined, DRY-RUN logs only.
     """
     import logging
-# Enhanced Logging Configuration
-from enhanced_logging_config import (
-    setup_enhanced_logging, get_trading_logger,
-    log_prediction, log_signal, log_confidence, 
-    log_trade_decision, log_entry_execution,
-    ENHANCED_LOGGING_CONFIG
-)
-
     account_id = globals().get("OANDA_ACCOUNT_ID", None)
     api_key = globals().get("OANDA_API_KEY", None)
     base_url = globals().get("OANDA_URL", "https://api-fxtrade.oanda.com/v3")
@@ -24232,15 +23989,7 @@ def rl_execute_production(model, symbols, observation, features_map, get_balance
       - features_map: dict[symbol] -> {'confidence': float, 'atr': float, ...}
       - get_balance_func: callable -> float
     """
-    import logging
-# Enhanced Logging Configuration
-from enhanced_logging_config import (
-    setup_enhanced_logging, get_trading_logger,
-    log_prediction, log_signal, log_confidence, 
-    log_trade_decision, log_entry_execution,
-    ENHANCED_LOGGING_CONFIG
-)
-, numpy as _np
+    import logging, numpy as _np
     logger = logging.getLogger(logger_name)
 
     action, _ = model.predict(observation, deterministic=bool(rl_deterministic))
