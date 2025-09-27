@@ -7835,6 +7835,10 @@ class NewsEconomicManager:
             print(f"❌ [News Reader] Error reading news from file: {e}")
             return None
     
+    def get_latest_news(self):
+        """Get latest news data - alias for get_latest_news_summary for compatibility"""
+        return self.get_latest_news_summary()
+    
     def get_latest_news_summary(self):
         """Get summary of latest news for bot consumption"""
         try:
