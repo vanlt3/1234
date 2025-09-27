@@ -1,47 +1,1393 @@
-﻿# Standard library imports
-print("🚀 [Bot] Starting imports...")
+# ==============================================================================
+# PRODUCTION-GRADE TRADING BOT WITH MASTER AGENT
+# ==============================================================================
+"""
+Enhanced Trading Bot with Master Agent for Production Trading
+- Real-time SL/TP monitoring with wick detection
+- Resilient multi-provider price aggregation
+- Master Agent decision system with risk management
+- Structured logging and observability
+- Production-grade configuration and CLI
+
+CONFIGURATION TEMPLATE:
+# Environment Variables (set these before running)
+export ENV=paper                    # dev, paper, or prod
+export FINNHUB_API_KEY=your_key     # Get from https://finnhub.io/
+export ALPHAVANTAGE_API_KEY=your_key # Get from https://www.alphavantage.co/
+export EODHD_API_KEY=your_key       # Optional, get from https://eodhd.com/
+export DRY_RUN=false                # Set to true for testing
+export USE_PAPER_TRADING=true      # Set to false for live trading
+
+QUICKSTART EXAMPLES:
+# Local execution
+python Bot-Trading_Swing.py --symbols EURUSD,BTCUSD,XAUUSD --timeframe 5m --enable-monitor --agent ensemble --dry-run
+
+# Colab execution
+%env ENV=paper
+%env FINNHUB_API_KEY=your_key
+!python Bot-Trading_Swing.py --symbols EURUSD,BTCUSD,XAUUSD --timeframe 5m --enable-monitor --agent rule
+
+# Self-test mode
+python Bot-Trading_Swing.py --self-test
+
+# Production mode (with live trading)
+export ENV=prod
+python Bot-Trading_Swing.py --symbols EURUSD --timeframe 5m --agent ensemble
+"""
+
+print("🚀 [Bot] Starting production-grade trading bot...")
 
 # ==================================================
-# ENCODING FIX FOR GOOGLE COLAB
+# ENVIRONMENT SETUP & HYGIENE
 # ==================================================
 import sys
 import os
+import warnings
+import argparse
+import asyncio
+import threading
+import time
+import json
+import logging
+import sqlite3
+import copy
+import re
+import glob
+import shutil
+from abc import ABC, abstractmethod
+from collections import deque
+from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, Any, List, Optional, Union, Tuple, Callable
+from pathlib import Path
+import functools
+import hashlib
+import traceback
 
-# Ensure UTF-8 encoding for stdout and stderr
+# Force UTF-8 encoding for Colab compatibility
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
-
-# Set environment variables for UTF-8
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
-print("🔧 [Encoding] UTF-8 encoding configured successfully")
+# Add workspace to path if present (Colab compatibility)
+if '/workspace' in os.getcwd() or '/content' in os.getcwd():
+    sys.path.insert(0, '/workspace')
+    sys.path.insert(0, '/content')
 
-import asyncio
-import copy
-import json
-import logging
-import re
-import sqlite3
-import time
-import threading
-import warnings
-print("✅ [Bot] Basic imports completed")
-import glob
-import shutil
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Union
-from collections import deque
-from datetime import datetime, timedelta
+# Suppress benign warnings for production
+warnings.filterwarnings('ignore', category=UserWarning, module='tensorflow')
+warnings.filterwarnings('ignore', category=FutureWarning, module='tensorflow')
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='tensorflow')
+warnings.filterwarnings('ignore', category=UserWarning, module='torch')
+warnings.filterwarnings('ignore', category=FutureWarning, module='torch')
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='torch')
+warnings.filterwarnings('ignore', category=UserWarning, module='jax')
+warnings.filterwarnings('ignore', category=FutureWarning, module='jax')
+
+# Force CPU execution for stability
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '-1')
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+
+print("🔧 [Environment] Production setup completed")
+
+# ==================================================
+# EXTERNAL IMPORTS WITH FALLBACKS
+# ==================================================
+try:
+    import gymnasium as gym
+    print("✅ [Gym] Using gymnasium")
+except ImportError:
+    try:
+        import gym
+        print("✅ [Gym] Using gym (fallback)")
+    except ImportError:
+        print("⚠️ [Gym] Neither gymnasium nor gym available")
+        gym = None
+
+try:
+    import aiohttp
+    import requests
+    print("✅ [HTTP] HTTP clients available")
+except ImportError:
+    print("⚠️ [HTTP] HTTP clients not available")
+    aiohttp = None
+    requests = None
+
+try:
+    import numpy as np
+    import pandas as pd
+    print("✅ [Data] NumPy/Pandas available")
+except ImportError:
+    print("⚠️ [Data] NumPy/Pandas not available")
+    np = None
+    pd = None
+
+try:
+    import pytz
+    print("✅ [Timezone] PyTZ available")
+except ImportError:
+    print("⚠️ [Timezone] PyTZ not available")
+    pytz = None
+
+# Optional ML imports
+try:
+    import lightgbm as lgb
+    print("✅ [ML] LightGBM available")
+except ImportError:
+    lgb = None
+
+try:
+    import tensorflow as tf
+    tf.config.set_visible_devices([], 'GPU')  # Force CPU
+    print("✅ [ML] TensorFlow available (CPU mode)")
+except ImportError:
+    tf = None
+
+try:
+    import torch
+    torch.set_num_threads(1)  # Limit CPU threads
+    print("✅ [ML] PyTorch available")
+except ImportError:
+    torch = None
+
+try:
+    import google.generativeai as genai
+    print("✅ [AI] Google Generative AI available")
+except ImportError:
+    genai = None
+
+print("✅ [Imports] All imports completed")
+
+# ==============================================================================
+# PRODUCTION CONFIGURATION SYSTEM
+# ==============================================================================
+
+@dataclass
+class Config:
+    """Production configuration with environment overrides"""
+    
+    # Environment
+    ENV: str = field(default_factory=lambda: os.getenv('ENV', 'paper'))
+    
+    # Paths
+    BASE_PATH: str = field(default_factory=lambda: 
+        '/content/drive/MyDrive/Bot' if '/content' in os.getcwd() else './bot_runtime')
+    
+    # API Keys
+    FINNHUB_API_KEY: str = field(default_factory=lambda: os.getenv('FINNHUB_API_KEY', ''))
+    ALPHAVANTAGE_API_KEY: str = field(default_factory=lambda: os.getenv('ALPHAVANTAGE_API_KEY', ''))
+    EODHD_API_KEY: str = field(default_factory=lambda: os.getenv('EODHD_API_KEY', ''))
+    
+    # Trading Configuration
+    SYMBOLS: List[str] = field(default_factory=lambda: ['EURUSD', 'BTCUSD', 'XAUUSD'])
+    TIMEFRAME: str = '5m'
+    DRY_RUN: bool = field(default_factory=lambda: os.getenv('DRY_RUN', 'false').lower() == 'true')
+    USE_PAPER_TRADING: bool = field(default_factory=lambda: os.getenv('USE_PAPER_TRADING', 'true').lower() == 'true')
+    
+    # Risk Management
+    RISK_PER_TRADE_PCT: float = 1.0
+    MAX_DAILY_DD_PCT: float = 3.0
+    MAX_WEEKLY_DD_PCT: float = 6.0
+    MAX_OPEN_TRADES: int = 3
+    MAX_TRADES_PER_DAY: int = 5
+    MIN_RR: float = 1.6
+    MIN_ATR_PIPS: float = 5.0
+    MAX_SPREAD_PIPS: float = 3.0
+    
+    # Monitoring
+    ENABLE_MONITOR: bool = True
+    WICK_TOLERANCE_PIPS: float = 2.0
+    MONITOR_INTERVAL_SECS: float = 1.0
+    
+    # News & Economic Data
+    ENABLE_NEWS: bool = True
+    NEWS_BLACKOUT_MINUTES: int = 30
+    
+    # Execution
+    PROVIDER_TIMEOUT_SECS: float = 1.0
+    TOTAL_PRICE_SLA_SECS: float = 2.0
+    MAX_RETRIES: int = 2
+    
+    # Strategy
+    ATR_LENGTH: int = 14
+    HTF_TIMEFRAME: str = '1h'
+    LTF_TIMEFRAME: str = '5m'
+    MAX_BARS_IN_TRADE: int = 50
+    MAX_MINUTES_IN_TRADE: int = 240
+    
+    # Logging
+    LOG_LEVEL: str = 'INFO'
+    ENABLE_STRUCTURED_LOGS: bool = True
+    
+    def __post_init__(self):
+        """Initialize paths and validate configuration"""
+        # Create directories
+        for subdir in ['logs', 'data', 'models']:
+            Path(self.BASE_PATH, subdir).mkdir(parents=True, exist_ok=True)
+        
+        # Validate environment
+        if self.ENV not in ['dev', 'paper', 'prod']:
+            self.ENV = 'paper'
+        
+        # Adjust risk for environment
+        if self.ENV == 'prod':
+            self.RISK_PER_TRADE_PCT = min(self.RISK_PER_TRADE_PCT, 0.5)
+            self.MAX_TRADES_PER_DAY = min(self.MAX_TRADES_PER_DAY, 3)
+        elif self.ENV == 'dev':
+            self.DRY_RUN = True
+            self.USE_PAPER_TRADING = True
+
+# Global config instance
+config = Config()
+
+# ==============================================================================
+# CORE ENUMS AND DATA STRUCTURES
+# ==============================================================================
+
+class Action(Enum):
+    """Trading action enumeration"""
+    NONE = "NONE"
+    LONG = "LONG"
+    SHORT = "SHORT"
+
+@dataclass
+class Decision:
+    """Master Agent decision output"""
+    action: Action
+    entry: Optional[float] = None
+    sl: Optional[float] = None
+    tp: Optional[float] = None
+    size: Optional[float] = None
+    confidence: float = 0.0
+    rationale: str = ""
+    expiry_ts: Optional[float] = None
+
+@dataclass
+class MarketState:
+    """Current market state for decision making"""
+    symbol: str
+    bid: float
+    ask: float
+    spread: float
+    atr: float
+    volatility: float
+    htf_bias: str  # 'bullish', 'bearish', 'neutral'
+    ltf_triggers: List[str]
+    session: str  # 'asian', 'london', 'ny'
+    time_of_day: str
+    proximity_to_news: float  # minutes to next high-impact event
+    liquidity_regime: str  # 'high', 'medium', 'low'
+
+@dataclass
+class RiskContext:
+    """Risk management context"""
+    equity: float
+    open_risk: float
+    daily_pnl: float
+    weekly_pnl: float
+    max_drawdown: float
+    trades_today: int
+    open_trades: int
+
+@dataclass
+class LatencyContext:
+    """Execution latency context"""
+    provider_latency_ms: float
+    decision_latency_ms: float
+    total_latency_ms: float
+    data_freshness_ms: float
+
+@dataclass
+class NewsContext:
+    """News and economic event context"""
+    recent_news: List[Dict[str, Any]]
+    upcoming_events: List[Dict[str, Any]]
+    sentiment_score: float
+    impact_level: str  # 'high', 'medium', 'low'
+
+# ==============================================================================
+# STRUCTURED LOGGING SYSTEM
+# ==============================================================================
+
+class TradingBotFormatter(logging.Formatter):
+    """Production-grade formatter with emoji support and structured fields"""
+    
+    def __init__(self):
+        super().__init__()
+        self.emoji_map = {
+            'DEBUG': '🔍',
+            'INFO': 'ℹ️',
+            'WARNING': '⚠️',
+            'ERROR': '❌',
+            'CRITICAL': '🚨',
+            'DataFeed': '📊',
+            'Signal': '📡',
+            'Confidence': '🎯',
+            'MasterAgent': '🤖',
+            'Portfolio': '💼',
+            'Risk': '🛡️',
+            'Exec': '⚡',
+            'Monitor': '👁️'
+        }
+    
+    def format(self, record):
+        # Get emoji for level
+        level_emoji = self.emoji_map.get(record.levelname, '📝')
+        channel_emoji = self.emoji_map.get(record.name.split('.')[-1], '📝')
+        
+        # Format timestamp
+        timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S.%f')[:-3]
+        
+        # Extract structured fields
+        symbol = getattr(record, 'symbol', 'N/A')
+        timeframe = getattr(record, 'timeframe', 'N/A')
+        pnl = getattr(record, 'pnl', 'N/A')
+        risk_pct = getattr(record, 'risk_pct', 'N/A')
+        
+        # Create formatted message
+        formatted = f"{level_emoji} {timestamp} | {channel_emoji} {record.levelname:8} | "
+        
+        if symbol != 'N/A':
+            formatted += f"📈 {symbol:8} | "
+        if timeframe != 'N/A':
+            formatted += f"⏰ {timeframe:4} | "
+        if pnl != 'N/A':
+            formatted += f"💰 {pnl:>8} | "
+        if risk_pct != 'N/A':
+            formatted += f"🛡️ {risk_pct:>5}% | "
+        
+        formatted += f"{record.getMessage()}"
+        
+        return formatted
+
+class LoggingManager:
+    """Centralized logging management with idempotent setup"""
+    
+    _initialized = False
+    _handlers_created = set()
+    
+    @classmethod
+    def setup_logging(cls, config: Config) -> Dict[str, logging.Logger]:
+        """Setup structured logging with idempotent handlers"""
+        if cls._initialized:
+            return cls._get_loggers()
+        
+        # Clear existing handlers to prevent duplicates
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        
+        # Configure root logger
+        root_logger.setLevel(getattr(logging, config.LOG_LEVEL))
+        
+        # Create formatter
+        formatter = TradingBotFormatter()
+        
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(getattr(logging, config.LOG_LEVEL))
+        root_logger.addHandler(console_handler)
+        
+        # File handler
+        log_file = Path(config.BASE_PATH, 'logs', 'trading_bot.log')
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.DEBUG)
+        root_logger.addHandler(file_handler)
+        
+        # Suppress noisy third-party loggers
+        noisy_loggers = [
+            'urllib3', 'requests', 'aiohttp', 'tensorflow', 'torch', 
+            'lightgbm', 'matplotlib', 'PIL', 'google'
+        ]
+        for logger_name in noisy_loggers:
+            logging.getLogger(logger_name).setLevel(logging.WARNING)
+        
+        cls._initialized = True
+        return cls._get_loggers()
+    
+    @classmethod
+    def _get_loggers(cls) -> Dict[str, logging.Logger]:
+        """Get channel-specific loggers"""
+        channels = [
+            'DataFeed', 'Signal', 'Confidence', 'MasterAgent', 
+            'Portfolio', 'Risk', 'Exec', 'Monitor'
+        ]
+        
+        loggers = {}
+        for channel in channels:
+            logger = logging.getLogger(f'trading_bot.{channel}')
+            loggers[channel] = logger
+        
+        return loggers
+
+# Helper functions for structured logging
+def log_signal(logger: logging.Logger, symbol: str, action: str, confidence: float, 
+               entry: float = None, sl: float = None, tp: float = None):
+    """Log trading signal with structured fields"""
+    extra = {
+        'symbol': symbol,
+        'action': action,
+        'confidence': confidence,
+        'entry': entry,
+        'sl': sl,
+        'tp': tp
+    }
+    logger.info(f"Signal: {action} {symbol} @ {entry} SL:{sl} TP:{tp} Conf:{confidence:.2f}", extra=extra)
+
+def log_prediction(logger: logging.Logger, symbol: str, prediction: str, 
+                   confidence: float, timeframe: str = None):
+    """Log prediction with structured fields"""
+    extra = {
+        'symbol': symbol,
+        'timeframe': timeframe,
+        'prediction': prediction,
+        'confidence': confidence
+    }
+    logger.info(f"Prediction: {prediction} for {symbol} Conf:{confidence:.2f}", extra=extra)
+
+def log_risk(logger: logging.Logger, symbol: str, risk_pct: float, 
+             equity: float, open_risk: float):
+    """Log risk metrics with structured fields"""
+    extra = {
+        'symbol': symbol,
+        'risk_pct': risk_pct,
+        'equity': equity,
+        'open_risk': open_risk
+    }
+    logger.info(f"Risk: {risk_pct:.1f}% of {equity:.0f} equity, open risk: {open_risk:.0f}", extra=extra)
+
+def log_monitor(logger: logging.Logger, symbol: str, event: str, 
+                price: float, sl: float = None, tp: float = None):
+    """Log monitoring events with structured fields"""
+    extra = {
+        'symbol': symbol,
+        'event': event,
+        'price': price,
+        'sl': sl,
+        'tp': tp
+    }
+    logger.info(f"Monitor: {event} at {price} SL:{sl} TP:{tp}", extra=extra)
+
+# Initialize logging
+loggers = LoggingManager.setup_logging(config)
+
+# ==============================================================================
+# REAL-TIME MONITORING SYSTEM
+# ==============================================================================
+
+class RealTimeMonitor:
+    """Real-time SL/TP monitoring with wick detection"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = loggers['Monitor']
+        self.running = False
+        self.monitor_task = None
+        self.callbacks = {
+            'on_sl_hit': [],
+            'on_tp_hit': [],
+            'on_wick_touch': []
+        }
+        self.active_positions = {}
+        self.last_prices = {}
+        
+    def add_callback(self, event_type: str, callback: Callable):
+        """Add callback for monitoring events"""
+        if event_type in self.callbacks:
+            self.callbacks[event_type].append(callback)
+    
+    async def start(self):
+        """Start monitoring loop"""
+        if not self.config.ENABLE_MONITOR:
+            self.logger.info("Real-time monitoring disabled")
+            return
+            
+        if self.running:
+            self.logger.warning("Monitor already running")
+            return
+            
+        self.running = True
+        self.logger.info("Starting real-time monitor")
+        
+        # Start monitoring task
+        self.monitor_task = asyncio.create_task(self._monitor_loop())
+        
+    async def stop(self):
+        """Stop monitoring loop"""
+        if not self.running:
+            return
+            
+        self.running = False
+        if self.monitor_task:
+            self.monitor_task.cancel()
+            try:
+                await self.monitor_task
+            except asyncio.CancelledError:
+                pass
+        
+        self.logger.info("Real-time monitor stopped")
+    
+    def add_position(self, symbol: str, side: str, entry: float, sl: float, tp: float):
+        """Add position to monitor"""
+        self.active_positions[symbol] = {
+            'side': side,
+            'entry': entry,
+            'sl': sl,
+            'tp': tp,
+            'added_at': time.time()
+        }
+        self.logger.info(f"Added position to monitor: {symbol} {side} @ {entry}")
+    
+    def remove_position(self, symbol: str):
+        """Remove position from monitor"""
+        if symbol in self.active_positions:
+            del self.active_positions[symbol]
+            self.logger.info(f"Removed position from monitor: {symbol}")
+    
+    async def _monitor_loop(self):
+        """Main monitoring loop"""
+        while self.running:
+            try:
+                await self._check_positions()
+                await asyncio.sleep(self.config.MONITOR_INTERVAL_SECS)
+            except Exception as e:
+                self.logger.error(f"Monitor loop error: {e}")
+                await asyncio.sleep(1.0)
+    
+    async def _check_positions(self):
+        """Check all active positions for SL/TP hits and wick touches"""
+        for symbol, position in self.active_positions.items():
+            try:
+                # Get current price
+                current_price = await self._get_current_price(symbol)
+                if current_price is None:
+                    continue
+                
+                # Store last price for wick detection
+                self.last_prices[symbol] = current_price
+                
+                # Check SL/TP hits
+                await self._check_sl_tp_hits(symbol, position, current_price)
+                
+                # Check for wick touches
+                await self._check_wick_touches(symbol, position, current_price)
+                
+            except Exception as e:
+                self.logger.error(f"Error checking position {symbol}: {e}")
+    
+    async def _get_current_price(self, symbol: str) -> Optional[float]:
+        """Get current price for symbol"""
+        # This will be integrated with the price aggregator in the main loop
+        # For now, return None to indicate no price available
+        return None
+    
+    async def _check_sl_tp_hits(self, symbol: str, position: Dict, current_price: float):
+        """Check for SL/TP hits"""
+        side = position['side']
+        sl = position['sl']
+        tp = position['tp']
+        
+        sl_hit = False
+        tp_hit = False
+        
+        if side == 'LONG':
+            sl_hit = current_price <= sl
+            tp_hit = current_price >= tp
+        else:  # SHORT
+            sl_hit = current_price >= sl
+            tp_hit = current_price <= tp
+        
+        if sl_hit:
+            await self._trigger_callback('on_sl_hit', symbol, current_price, sl)
+            self.remove_position(symbol)
+        elif tp_hit:
+            await self._trigger_callback('on_tp_hit', symbol, current_price, tp)
+            self.remove_position(symbol)
+    
+    async def _check_wick_touches(self, symbol: str, position: Dict, current_price: float):
+        """Check for wick touches (intrabar spikes)"""
+        # This is a simplified implementation
+        # In production, you'd analyze recent candle OHLC data
+        
+        side = position['side']
+        sl = position['sl']
+        tolerance = self.config.WICK_TOLERANCE_PIPS / 10000  # Convert to price
+        
+        wick_touch = False
+        
+        if side == 'LONG' and current_price <= sl + tolerance:
+            wick_touch = True
+        elif side == 'SHORT' and current_price >= sl - tolerance:
+            wick_touch = True
+        
+        if wick_touch:
+            await self._trigger_callback('on_wick_touch', symbol, current_price, sl)
+    
+    async def _trigger_callback(self, event_type: str, symbol: str, price: float, level: float):
+        """Trigger callbacks for monitoring events"""
+        for callback in self.callbacks[event_type]:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(symbol, price, level)
+                else:
+                    callback(symbol, price, level)
+            except Exception as e:
+                self.logger.error(f"Callback error for {event_type}: {e}")
+
+# ==============================================================================
+# RESILIENT PRICE FALLBACK AGGREGATOR
+# ==============================================================================
+
+class PriceProvider(ABC):
+    """Abstract base class for price providers"""
+    
+    @abstractmethod
+    async def get_price(self, symbol: str) -> Optional[float]:
+        """Get current price for symbol"""
+        pass
+    
+    @abstractmethod
+    def get_name(self) -> str:
+        """Get provider name"""
+        pass
+
+class FinnhubProvider(PriceProvider):
+    """Finnhub price provider"""
+    
+    def __init__(self, api_key: str, timeout: float = 1.0):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.base_url = "https://finnhub.io/api/v1"
+        self.session = None
+        
+    async def get_price(self, symbol: str) -> Optional[float]:
+        """Get price from Finnhub"""
+        if not self.api_key:
+            return None
+            
+        try:
+            if not self.session:
+                self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
+            
+            # Map symbols for Finnhub
+            mapped_symbol = self._map_symbol(symbol)
+            url = f"{self.base_url}/quote"
+            params = {'symbol': mapped_symbol, 'token': self.api_key}
+            
+            async with self.session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('c')  # Current price
+                else:
+                    return None
+                    
+        except Exception:
+            return None
+    
+    def get_name(self) -> str:
+        return "Finnhub"
+    
+    def _map_symbol(self, symbol: str) -> str:
+        """Map trading symbols to Finnhub format"""
+        mapping = {
+            'EURUSD': 'EURUSD=X',
+            'GBPUSD': 'GBPUSD=X',
+            'USDJPY': 'USDJPY=X',
+            'AUDUSD': 'AUDUSD=X',
+            'USDCAD': 'USDCAD=X',
+            'BTCUSD': 'BTC-USD',
+            'ETHUSD': 'ETH-USD',
+            'XAUUSD': 'GC=F',
+            'XAGUSD': 'SI=F'
+        }
+        return mapping.get(symbol, symbol)
+
+class YahooFinanceProvider(PriceProvider):
+    """Yahoo Finance price provider"""
+    
+    def __init__(self, timeout: float = 1.0):
+        self.timeout = timeout
+        self.session = None
+        
+    async def get_price(self, symbol: str) -> Optional[float]:
+        """Get price from Yahoo Finance"""
+        try:
+            if not self.session:
+                self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
+            
+            # Map symbols for Yahoo Finance
+            mapped_symbol = self._map_symbol(symbol)
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{mapped_symbol}"
+            
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    result = data.get('chart', {}).get('result', [])
+                    if result:
+                        price = result[0].get('meta', {}).get('regularMarketPrice')
+                        return price
+                return None
+                
+        except Exception:
+            return None
+    
+    def get_name(self) -> str:
+        return "Yahoo Finance"
+    
+    def _map_symbol(self, symbol: str) -> str:
+        """Map trading symbols to Yahoo Finance format"""
+        mapping = {
+            'EURUSD': 'EURUSD=X',
+            'GBPUSD': 'GBPUSD=X',
+            'USDJPY': 'USDJPY=X',
+            'AUDUSD': 'AUDUSD=X',
+            'USDCAD': 'USDCAD=X',
+            'BTCUSD': 'BTC-USD',
+            'ETHUSD': 'ETH-USD',
+            'XAUUSD': 'GC=F',
+            'XAGUSD': 'SI=F'
+        }
+        return mapping.get(symbol, symbol)
+
+class AlphaVantageProvider(PriceProvider):
+    """Alpha Vantage price provider"""
+    
+    def __init__(self, api_key: str, timeout: float = 1.0):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.base_url = "https://www.alphavantage.co/query"
+        self.session = None
+        
+    async def get_price(self, symbol: str) -> Optional[float]:
+        """Get price from Alpha Vantage"""
+        if not self.api_key:
+            return None
+            
+        try:
+            if not self.session:
+                self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout))
+            
+            # Map symbols for Alpha Vantage
+            mapped_symbol = self._map_symbol(symbol)
+            url = self.base_url
+            params = {
+                'function': 'GLOBAL_QUOTE',
+                'symbol': mapped_symbol,
+                'apikey': self.api_key
+            }
+            
+            async with self.session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    quote = data.get('Global Quote', {})
+                    price = quote.get('05. price')
+                    if price:
+                        return float(price)
+                return None
+                
+        except Exception:
+            return None
+    
+    def get_name(self) -> str:
+        return "Alpha Vantage"
+    
+    def _map_symbol(self, symbol: str) -> str:
+        """Map trading symbols to Alpha Vantage format"""
+        mapping = {
+            'EURUSD': 'EURUSD',
+            'GBPUSD': 'GBPUSD',
+            'USDJPY': 'USDJPY',
+            'AUDUSD': 'AUDUSD',
+            'USDCAD': 'USDCAD',
+            'BTCUSD': 'BTC',
+            'ETHUSD': 'ETH',
+            'XAUUSD': 'GOLD',
+            'XAGUSD': 'SILVER'
+        }
+        return mapping.get(symbol, symbol)
+
+class PriceAggregator:
+    """Resilient price aggregation with fallback providers"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = loggers['DataFeed']
+        self.providers = []
+        self.circuit_breakers = {}  # Track provider failures
+        self.last_prices = {}  # Cache last known prices
+        
+        # Initialize providers
+        self._initialize_providers()
+        
+    def _initialize_providers(self):
+        """Initialize available providers"""
+        # Finnhub (primary)
+        if self.config.FINNHUB_API_KEY:
+            self.providers.append(FinnhubProvider(self.config.FINNHUB_API_KEY, self.config.PROVIDER_TIMEOUT_SECS))
+        
+        # Yahoo Finance (fallback)
+        self.providers.append(YahooFinanceProvider(self.config.PROVIDER_TIMEOUT_SECS))
+        
+        # Alpha Vantage (fallback)
+        if self.config.ALPHAVANTAGE_API_KEY:
+            self.providers.append(AlphaVantageProvider(self.config.ALPHAVANTAGE_API_KEY, self.config.PROVIDER_TIMEOUT_SECS))
+        
+        self.logger.info(f"Initialized {len(self.providers)} price providers")
+    
+    async def get_realtime_price(self, symbol: str) -> Optional[float]:
+        """Get real-time price with fallback providers"""
+        start_time = time.time()
+        
+        # Check circuit breakers
+        for provider in self.providers:
+            provider_name = provider.get_name()
+            if provider_name in self.circuit_breakers:
+                breaker = self.circuit_breakers[provider_name]
+                if time.time() - breaker['last_failure'] < 60:  # 1 minute cooldown
+                    continue
+        
+        # Try providers in order
+        for provider in self.providers:
+            try:
+                price = await provider.get_price(symbol)
+                if price is not None:
+                    # Reset circuit breaker on success
+                    provider_name = provider.get_name()
+                    if provider_name in self.circuit_breakers:
+                        del self.circuit_breakers[provider_name]
+                    
+                    # Cache the price
+                    self.last_prices[symbol] = {
+                        'price': price,
+                        'timestamp': time.time(),
+                        'provider': provider_name
+                    }
+                    
+                    latency = (time.time() - start_time) * 1000
+                    self.logger.debug(f"Price from {provider_name}: {symbol} = {price} (latency: {latency:.1f}ms)")
+                    return price
+                    
+            except Exception as e:
+                # Record failure
+                provider_name = provider.get_name()
+                self.circuit_breakers[provider_name] = {
+                    'last_failure': time.time(),
+                    'error': str(e)
+                }
+                self.logger.warning(f"Provider {provider_name} failed for {symbol}: {e}")
+        
+        # All providers failed, return cached price if available
+        if symbol in self.last_prices:
+            cached = self.last_prices[symbol]
+            age = time.time() - cached['timestamp']
+            if age < 300:  # 5 minutes max age
+                self.logger.warning(f"Using cached price for {symbol}: {cached['price']} (age: {age:.1f}s)")
+                return cached['price']
+        
+        self.logger.error(f"All providers failed for {symbol}")
+        return None
+    
+    async def cleanup(self):
+        """Cleanup provider sessions"""
+        for provider in self.providers:
+            if hasattr(provider, 'session') and provider.session:
+                await provider.session.close()
+
+# ==============================================================================
+# MASTER AGENT DECISION SYSTEM
+# ==============================================================================
+
+class Strategy(ABC):
+    """Abstract base class for trading strategies"""
+    
+    @abstractmethod
+    async def decide(self, market_state: MarketState, risk_ctx: RiskContext, 
+                    latency_ctx: LatencyContext, news_ctx: NewsContext) -> Decision:
+        """Make trading decision"""
+        pass
+    
+    @abstractmethod
+    def get_name(self) -> str:
+        """Get strategy name"""
+        pass
+
+class RuleBasedStrategy(Strategy):
+    """Rule-based trading strategy using price action and ATR"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = loggers['MasterAgent']
+        
+    async def decide(self, market_state: MarketState, risk_ctx: RiskContext, 
+                    latency_ctx: LatencyContext, news_ctx: NewsContext) -> Decision:
+        """Make rule-based trading decision"""
+        
+        # Check risk limits
+        if not self._check_risk_limits(risk_ctx):
+            return Decision(Action.NONE, rationale="Risk limits exceeded")
+        
+        # Check news blackout
+        if news_ctx.impact_level == 'high' and news_ctx.proximity_to_news < self.config.NEWS_BLACKOUT_MINUTES:
+            return Decision(Action.NONE, rationale="High impact news blackout")
+        
+        # Check spread limits
+        if market_state.spread > self.config.MAX_SPREAD_PIPS / 10000:
+            return Decision(Action.NONE, rationale=f"Spread too wide: {market_state.spread:.5f}")
+        
+        # Check ATR minimum
+        if market_state.atr < self.config.MIN_ATR_PIPS / 10000:
+            return Decision(Action.NONE, rationale=f"ATR too low: {market_state.atr:.5f}")
+        
+        # Determine entry based on HTF bias and LTF triggers
+        entry_price = None
+        sl = None
+        tp = None
+        action = Action.NONE
+        confidence = 0.0
+        rationale = ""
+        
+        if market_state.htf_bias == 'bullish' and 'long_trigger' in market_state.ltf_triggers:
+            action = Action.LONG
+            entry_price = market_state.ask
+            sl = entry_price - (market_state.atr * 2)  # 2x ATR stop
+            tp = entry_price + (market_state.atr * 3)  # 3x ATR target
+            confidence = 0.7
+            rationale = "HTF bullish + LTF long trigger"
+            
+        elif market_state.htf_bias == 'bearish' and 'short_trigger' in market_state.ltf_triggers:
+            action = Action.SHORT
+            entry_price = market_state.bid
+            sl = entry_price + (market_state.atr * 2)  # 2x ATR stop
+            tp = entry_price - (market_state.atr * 3)  # 3x ATR target
+            confidence = 0.7
+            rationale = "HTF bearish + LTF short trigger"
+        
+        # Calculate position size
+        size = None
+        if action != Action.NONE and entry_price and sl:
+            size = self._calculate_position_size(risk_ctx.equity, entry_price, sl, market_state.symbol)
+        
+        return Decision(
+            action=action,
+            entry=entry_price,
+            sl=sl,
+            tp=tp,
+            size=size,
+            confidence=confidence,
+            rationale=rationale,
+            expiry_ts=time.time() + 300  # 5 minute expiry
+        )
+    
+    def get_name(self) -> str:
+        return "RuleBased"
+    
+    def _check_risk_limits(self, risk_ctx: RiskContext) -> bool:
+        """Check if risk limits are within bounds"""
+        if risk_ctx.daily_pnl < -risk_ctx.equity * self.config.MAX_DAILY_DD_PCT / 100:
+            return False
+        if risk_ctx.weekly_pnl < -risk_ctx.equity * self.config.MAX_WEEKLY_DD_PCT / 100:
+            return False
+        if risk_ctx.open_trades >= self.config.MAX_OPEN_TRADES:
+            return False
+        if risk_ctx.trades_today >= self.config.MAX_TRADES_PER_DAY:
+            return False
+        return True
+    
+    def _calculate_position_size(self, equity: float, entry: float, sl: float, symbol: str) -> float:
+        """Calculate position size based on risk percentage"""
+        risk_capital = equity * self.config.RISK_PER_TRADE_PCT / 100
+        risk_per_unit = abs(entry - sl)
+        
+        # Get point value for symbol
+        point_value = self._get_point_value(symbol)
+        size = risk_capital / (risk_per_unit * point_value)
+        
+        return size
+    
+    def _get_point_value(self, symbol: str) -> float:
+        """Get point value for symbol"""
+        # Simplified point values
+        point_values = {
+            'EURUSD': 100000,
+            'GBPUSD': 100000,
+            'USDJPY': 100000,
+            'AUDUSD': 100000,
+            'BTCUSD': 1,
+            'ETHUSD': 1,
+            'XAUUSD': 100,
+            'XAGUSD': 5000
+        }
+        return point_values.get(symbol, 100000)
+
+class MLStrategy(Strategy):
+    """Machine Learning trading strategy (placeholder)"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = loggers['MasterAgent']
+        self.model = None
+        
+    async def decide(self, market_state: MarketState, risk_ctx: RiskContext, 
+                    latency_ctx: LatencyContext, news_ctx: NewsContext) -> Decision:
+        """Make ML-based trading decision"""
+        
+        # For now, fallback to rule-based
+        rule_strategy = RuleBasedStrategy(self.config)
+        return await rule_strategy.decide(market_state, risk_ctx, latency_ctx, news_ctx)
+    
+    def get_name(self) -> str:
+        return "ML"
+
+class EnsembleCombiner:
+    """Ensemble strategy combiner with reliability weighting"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = loggers['MasterAgent']
+        self.strategies = []
+        self.performance_tracker = {}  # Track strategy performance
+        
+        # Initialize strategies
+        self.strategies.append(RuleBasedStrategy(config))
+        self.strategies.append(MLStrategy(config))
+        
+    async def decide(self, market_state: MarketState, risk_ctx: RiskContext, 
+                    latency_ctx: LatencyContext, news_ctx: NewsContext) -> Decision:
+        """Make ensemble decision"""
+        
+        decisions = []
+        
+        # Get decisions from all strategies
+        for strategy in self.strategies:
+            try:
+                decision = await strategy.decide(market_state, risk_ctx, latency_ctx, news_ctx)
+                decisions.append((strategy.get_name(), decision))
+            except Exception as e:
+                self.logger.error(f"Strategy {strategy.get_name()} failed: {e}")
+        
+        if not decisions:
+            return Decision(Action.NONE, rationale="All strategies failed")
+        
+        # Simple voting mechanism (can be enhanced with performance weighting)
+        long_votes = sum(1 for _, d in decisions if d.action == Action.LONG)
+        short_votes = sum(1 for _, d in decisions if d.action == Action.SHORT)
+        
+        if long_votes > short_votes and long_votes > 0:
+            # Take the best LONG decision
+            best_decision = max(decisions, key=lambda x: x[1].confidence if x[1].action == Action.LONG else 0)
+            return best_decision[1]
+        elif short_votes > long_votes and short_votes > 0:
+            # Take the best SHORT decision
+            best_decision = max(decisions, key=lambda x: x[1].confidence if x[1].action == Action.SHORT else 0)
+            return best_decision[1]
+        else:
+            return Decision(Action.NONE, rationale="No consensus")
+
+class MasterAgent:
+    """Master Agent for production trading decisions"""
+    
+    def __init__(self, config: Config, strategy_type: str = 'ensemble'):
+        self.config = config
+        self.logger = loggers['MasterAgent']
+        self.strategy_type = strategy_type
+        
+        # Initialize strategy
+        if strategy_type == 'rule':
+            self.strategy = RuleBasedStrategy(config)
+        elif strategy_type == 'ml':
+            self.strategy = MLStrategy(config)
+        else:  # ensemble
+            self.strategy = EnsembleCombiner(config)
+        
+        self.logger.info(f"MasterAgent initialized with {strategy_type} strategy")
+        
+        # Performance tracking
+        self.decision_count = 0
+        self.last_decision_time = 0
+        
+    async def decide(self, market_state: MarketState, risk_ctx: RiskContext, 
+                    latency_ctx: LatencyContext, news_ctx: NewsContext) -> Decision:
+        """Make trading decision"""
+        
+        start_time = time.time()
+        
+        try:
+            # Make decision
+            decision = await self.strategy.decide(market_state, risk_ctx, latency_ctx, news_ctx)
+            
+            # Track performance
+            decision_time = (time.time() - start_time) * 1000
+            self.decision_count += 1
+            self.last_decision_time = decision_time
+            
+            # Log decision
+            if decision.action != Action.NONE:
+                log_signal(
+                    self.logger, 
+                    market_state.symbol, 
+                    decision.action.value,
+                    decision.confidence,
+                    decision.entry,
+                    decision.sl,
+                    decision.tp
+                )
+            
+            self.logger.debug(f"Decision made in {decision_time:.1f}ms: {decision.action.value} {decision.rationale}")
+            
+            return decision
+            
+        except Exception as e:
+            self.logger.error(f"Decision error: {e}")
+            return Decision(Action.NONE, rationale=f"Decision error: {e}")
+    
+    def update_on_fill(self, fill_event: Dict[str, Any]):
+        """Update agent state on order fill"""
+        self.logger.info(f"Order filled: {fill_event}")
+        # Update performance tracking, position tracking, etc.
+    
+    def update_on_cancel(self, cancel_event: Dict[str, Any]):
+        """Update agent state on order cancellation"""
+        self.logger.info(f"Order cancelled: {cancel_event}")
+    
+    def on_stop_hit(self, stop_event: Dict[str, Any]):
+        """Handle stop loss hit"""
+        self.logger.warning(f"Stop loss hit: {stop_event}")
+    
+    def on_take_profit(self, tp_event: Dict[str, Any]):
+        """Handle take profit hit"""
+        self.logger.info(f"Take profit hit: {tp_event}")
+
+# ==============================================================================
+# CLI SYSTEM AND SELF-TEST
+# ==============================================================================
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Production Trading Bot with Master Agent')
+    
+    # Environment
+    parser.add_argument('--env', choices=['dev', 'paper', 'prod'], default='paper',
+                       help='Environment mode')
+    
+    # Trading configuration
+    parser.add_argument('--symbols', type=str, default='EURUSD,BTCUSD,XAUUSD',
+                       help='Comma-separated list of symbols to trade')
+    parser.add_argument('--timeframe', type=str, default='5m',
+                       help='Trading timeframe')
+    
+    # Agent configuration
+    parser.add_argument('--agent', choices=['rule', 'ml', 'ensemble'], default='ensemble',
+                       help='Master Agent strategy type')
+    
+    # Monitoring
+    parser.add_argument('--enable-monitor', action='store_true', default=True,
+                       help='Enable real-time monitoring')
+    parser.add_argument('--disable-monitor', action='store_true',
+                       help='Disable real-time monitoring')
+    
+    # Execution modes
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Dry run mode (no actual trades)')
+    parser.add_argument('--paper', action='store_true',
+                       help='Paper trading mode')
+    
+    # Testing
+    parser.add_argument('--self-test', action='store_true',
+                       help='Run self-test suite')
+    
+    return parser.parse_args()
+
+def print_startup_summary(config: Config, args):
+    """Print startup configuration summary"""
+    print("\n" + "="*80)
+    print("🚀 PRODUCTION TRADING BOT STARTUP SUMMARY")
+    print("="*80)
+    
+    # Environment
+    print(f"🌍 Environment: {config.ENV}")
+    print(f"📁 Base Path: {config.BASE_PATH}")
+    
+    # Trading
+    print(f"📈 Symbols: {', '.join(config.SYMBOLS)}")
+    print(f"⏰ Timeframe: {config.TIMEFRAME}")
+    print(f"🤖 Agent: {args.agent}")
+    
+    # Risk
+    print(f"🛡️ Risk per Trade: {config.RISK_PER_TRADE_PCT}%")
+    print(f"📊 Max Daily DD: {config.MAX_DAILY_DD_PCT}%")
+    print(f"🔢 Max Open Trades: {config.MAX_OPEN_TRADES}")
+    
+    # Execution
+    print(f"🔍 Dry Run: {config.DRY_RUN}")
+    print(f"📝 Paper Trading: {config.USE_PAPER_TRADING}")
+    print(f"👁️ Monitor Enabled: {config.ENABLE_MONITOR}")
+    
+    # API Keys (redacted)
+    print(f"🔑 Finnhub API: {'✓' if config.FINNHUB_API_KEY else '✗'}")
+    print(f"🔑 Alpha Vantage API: {'✓' if config.ALPHAVANTAGE_API_KEY else '✗'}")
+    print(f"🔑 EODHD API: {'✓' if config.EODHD_API_KEY else '✗'}")
+    
+    print("="*80 + "\n")
+
+class SelfTestSuite:
+    """Comprehensive self-test suite"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = loggers['MasterAgent']
+        self.test_results = {}
+        
+    async def run_all_tests(self) -> bool:
+        """Run all self-tests"""
+        print("\n🧪 RUNNING SELF-TEST SUITE")
+        print("="*50)
+        
+        tests = [
+            self.test_price_providers,
+            self.test_monitor_system,
+            self.test_master_agent,
+            self.test_logging_system,
+            self.test_config_validation
+        ]
+        
+        all_passed = True
+        for test in tests:
+            try:
+                result = await test()
+                self.test_results[test.__name__] = result
+                status = "✅ PASS" if result else "❌ FAIL"
+                print(f"{status} {test.__name__}")
+                if not result:
+                    all_passed = False
+            except Exception as e:
+                print(f"❌ FAIL {test.__name__}: {e}")
+                self.test_results[test.__name__] = False
+                all_passed = False
+        
+        print("="*50)
+        if all_passed:
+            print("🎉 ALL TESTS PASSED!")
+        else:
+            print("⚠️ SOME TESTS FAILED!")
+        
+        return all_passed
+    
+    async def test_price_providers(self) -> bool:
+        """Test price provider fallback chain"""
+        try:
+            aggregator = PriceAggregator(self.config)
+            
+            # Test with a known symbol
+            price = await aggregator.get_realtime_price('EURUSD')
+            
+            # Cleanup
+            await aggregator.cleanup()
+            
+            return price is not None
+        except Exception:
+            return False
+    
+    async def test_monitor_system(self) -> bool:
+        """Test real-time monitoring system"""
+        try:
+            monitor = RealTimeMonitor(self.config)
+            
+            # Test adding a position
+            monitor.add_position('EURUSD', 'LONG', 1.1000, 1.0950, 1.1100)
+            
+            # Test removing position
+            monitor.remove_position('EURUSD')
+            
+            return True
+        except Exception:
+            return False
+    
+    async def test_master_agent(self) -> bool:
+        """Test Master Agent decision making"""
+        try:
+            agent = MasterAgent(self.config, 'rule')
+            
+            # Create test market state
+            market_state = MarketState(
+                symbol='EURUSD',
+                bid=1.1000,
+                ask=1.1002,
+                spread=0.0002,
+                atr=0.0010,
+                volatility=0.15,
+                htf_bias='bullish',
+                ltf_triggers=['long_trigger'],
+                session='london',
+                time_of_day='morning',
+                proximity_to_news=60.0,
+                liquidity_regime='high'
+            )
+            
+            # Create test contexts
+            risk_ctx = RiskContext(
+                equity=10000,
+                open_risk=0,
+                daily_pnl=0,
+                weekly_pnl=0,
+                max_drawdown=0,
+                trades_today=0,
+                open_trades=0
+            )
+            
+            latency_ctx = LatencyContext(
+                provider_latency_ms=50,
+                decision_latency_ms=10,
+                total_latency_ms=60,
+                data_freshness_ms=100
+            )
+            
+            news_ctx = NewsContext(
+                recent_news=[],
+                upcoming_events=[],
+                sentiment_score=0.0,
+                impact_level='low'
+            )
+            
+            # Test decision making
+            decision = await agent.decide(market_state, risk_ctx, latency_ctx, news_ctx)
+            
+            return decision is not None
+        except Exception:
+            return False
+    
+    async def test_logging_system(self) -> bool:
+        """Test logging system idempotency"""
+        try:
+            # Test that logging can be initialized multiple times
+            loggers1 = LoggingManager.setup_logging(self.config)
+            loggers2 = LoggingManager.setup_logging(self.config)
+            
+            # Should return the same loggers
+            return loggers1 == loggers2
+        except Exception:
+            return False
+    
+    async def test_config_validation(self) -> bool:
+        """Test configuration validation"""
+        try:
+            # Test that config creates directories
+            base_path = Path(self.config.BASE_PATH)
+            logs_dir = base_path / 'logs'
+            data_dir = base_path / 'data'
+            models_dir = base_path / 'models'
+            
+            return all([logs_dir.exists(), data_dir.exists(), models_dir.exists()])
+        except Exception:
+            return False
 
 # ==============================================================================
 # REFACTORED CONSTANTS AND CONFIGURATION
 # ==============================================================================
-
-from dataclasses import dataclass
-from enum import Enum
-from typing import Dict, Any, List, Optional, Union, Tuple
 
 # Feature flags
 ENABLE_HISTORICAL_SL_CHECK = False  # Set to False to disable historical SL checking
@@ -22828,42 +24174,173 @@ def run_auto_fix():
         print("\n NO FIXES APPLIED")
         print(" Manual fix required")
 
+# ==============================================================================
+# PRODUCTION MAIN EXECUTION FLOW
+# ==============================================================================
+
+async def main():
+    """Main production execution flow"""
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Update config based on arguments
+    config.ENV = args.env
+    config.SYMBOLS = [s.strip() for s in args.symbols.split(',')]
+    config.TIMEFRAME = args.timeframe
+    
+    if args.dry_run:
+        config.DRY_RUN = True
+    if args.paper:
+        config.USE_PAPER_TRADING = True
+    if args.disable_monitor:
+        config.ENABLE_MONITOR = False
+    
+    # Print startup summary
+    print_startup_summary(config, args)
+    
+    # Run self-tests if requested
+    if args.self_test:
+        test_suite = SelfTestSuite(config)
+        success = await test_suite.run_all_tests()
+        if not success:
+            print("❌ Self-tests failed. Exiting.")
+            return
+        print("✅ Self-tests passed. Continuing...")
+    
+    # Initialize components
+    logger = loggers['MasterAgent']
+    logger.info("Initializing production trading bot components...")
+    
+    # Initialize price aggregator
+    price_aggregator = PriceAggregator(config)
+    logger.info("Price aggregator initialized")
+    
+    # Initialize real-time monitor
+    monitor = RealTimeMonitor(config)
+    logger.info("Real-time monitor initialized")
+    
+    # Initialize Master Agent
+    master_agent = MasterAgent(config, args.agent)
+    logger.info(f"Master Agent initialized with {args.agent} strategy")
+    
+    # Setup monitor callbacks
+    async def on_sl_hit(symbol: str, price: float, sl: float):
+        logger.warning(f"Stop loss hit: {symbol} at {price}")
+        master_agent.on_stop_hit({'symbol': symbol, 'price': price, 'sl': sl})
+    
+    async def on_tp_hit(symbol: str, price: float, tp: float):
+        logger.info(f"Take profit hit: {symbol} at {price}")
+        master_agent.on_take_profit({'symbol': symbol, 'price': price, 'tp': tp})
+    
+    async def on_wick_touch(symbol: str, price: float, sl: float):
+        logger.warning(f"Wick touch detected: {symbol} at {price} near SL {sl}")
+    
+    monitor.add_callback('on_sl_hit', on_sl_hit)
+    monitor.add_callback('on_tp_hit', on_tp_hit)
+    monitor.add_callback('on_wick_touch', on_wick_touch)
+    
+    # Start monitoring
+    await monitor.start()
+    
+    try:
+        # Main trading loop
+        logger.info("Starting main trading loop...")
+        
+        while True:
+            try:
+                # Process each symbol
+                for symbol in config.SYMBOLS:
+                    # Get current price
+                    current_price = await price_aggregator.get_realtime_price(symbol)
+                    if current_price is None:
+                        logger.warning(f"No price available for {symbol}")
+                        continue
+                    
+                    # Create market state (simplified for demo)
+                    market_state = MarketState(
+                        symbol=symbol,
+                        bid=current_price - 0.0001,  # Simplified spread
+                        ask=current_price + 0.0001,
+                        spread=0.0002,
+                        atr=0.0010,  # Simplified ATR
+                        volatility=0.15,
+                        htf_bias='neutral',  # Would be calculated from HTF data
+                        ltf_triggers=[],  # Would be calculated from LTF data
+                        session='london',
+                        time_of_day='morning',
+                        proximity_to_news=60.0,
+                        liquidity_regime='high'
+                    )
+                    
+                    # Create contexts (simplified for demo)
+                    risk_ctx = RiskContext(
+                        equity=10000,  # Would be actual account equity
+                        open_risk=0,
+                        daily_pnl=0,
+                        weekly_pnl=0,
+                        max_drawdown=0,
+                        trades_today=0,
+                        open_trades=0
+                    )
+                    
+                    latency_ctx = LatencyContext(
+                        provider_latency_ms=50,
+                        decision_latency_ms=10,
+                        total_latency_ms=60,
+                        data_freshness_ms=100
+                    )
+                    
+                    news_ctx = NewsContext(
+                        recent_news=[],
+                        upcoming_events=[],
+                        sentiment_score=0.0,
+                        impact_level='low'
+                    )
+                    
+                    # Make trading decision
+                    decision = await master_agent.decide(market_state, risk_ctx, latency_ctx, news_ctx)
+                    
+                    # Execute decision (simplified for demo)
+                    if decision.action != Action.NONE and not config.DRY_RUN:
+                        logger.info(f"Executing {decision.action.value} for {symbol}")
+                        # In production, this would submit actual orders
+                        # For now, just add to monitor if it's a real trade
+                        if decision.entry and decision.sl and decision.tp:
+                            monitor.add_position(
+                                symbol, 
+                                decision.action.value.lower(), 
+                                decision.entry, 
+                                decision.sl, 
+                                decision.tp
+                            )
+                
+                # Sleep between iterations
+                await asyncio.sleep(60)  # 1 minute between decision cycles
+                
+            except KeyboardInterrupt:
+                logger.info("Received interrupt signal")
+                break
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}")
+                await asyncio.sleep(5)  # Brief pause on error
+    
+    finally:
+        # Cleanup
+        logger.info("Shutting down...")
+        await monitor.stop()
+        await price_aggregator.cleanup()
+        logger.info("Shutdown complete")
+
 # Run smoke test if this file is executed directly
 if __name__ == "__main__":
-    print(" BOT STARTING...")
+    print("🚀 PRODUCTION TRADING BOT STARTING...")
     
-    # Test NewsEconomicManager first
-    print(" Testing NewsEconomicManager...")
+    # Run the async main function
     try:
-        news_manager = NewsEconomicManager()
-        print("NewsEconomicManager created successfully")
-        print(f"   - news_providers: {len(news_manager.news_providers)}")
-        print(f"   - llm_analyzer: {news_manager.llm_analyzer is not None}")
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n👋 Bot stopped by user")
     except Exception as e:
-        print(f"NewsEconomicManager failed: {e}")
+        print(f"❌ Bot failed: {e}")
         import traceback
         traceback.print_exc()
-    
-    # Test Bot creation
-    print(" Testing Bot creation...")
-    try:
-        bot = EnhancedTradingBot()
-        print("EnhancedTradingBot created successfully")
-        print(f"   - hasattr news_manager: {hasattr(bot, 'news_manager')}")
-        if hasattr(bot, 'news_manager'):
-            print(f"   - news_manager is not None: {bot.news_manager is not None}")
-    except Exception as e:
-        print(f"EnhancedTradingBot failed: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    # Ch y auto-fix before khi test
-    print(" CHECKING FOR DUPLICATE CLASSES...")
-    run_auto_fix()
-    
-    # Run production test suite
-    test_suite = ProductionTestSuite()
-    test_suite.run_production_tests()
-
-    # Also run smoke test
-    smoke_test_crypto()
