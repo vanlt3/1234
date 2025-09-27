@@ -2347,6 +2347,11 @@ MAX_DRAWDOWN_THRESHOLD = 0.15
 MIN_CALMAR_RATIO = 0.8
 MIN_INFORMATION_RATIO = 0.5
 
+# Model quality gates thresholds
+MIN_F1_SCORE_GATE = 0.55  # Minimum F1 score for model acceptance
+MAX_STD_F1_GATE = 0.15    # Maximum standard deviation for F1 score
+MIN_ACCURACY_GATE = 0.52  # Minimum accuracy for model acceptance
+
 # Enhanced risk management configuration by asset class
 RISK_CONFIG_BY_ASSET_CLASS = {
     "equity_index": {
