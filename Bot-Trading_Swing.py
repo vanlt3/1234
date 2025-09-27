@@ -13064,10 +13064,7 @@ class ProductionConfidenceManager:
                 action_confidences[action] /= total_weight
         
         # Find the action with highest confidence
-        final_decision = max(action_confidences.items(), key=lambda x: x[1])
-        
-        # Apply volatility and risk adjustments
-        final_confidence = self._apply_risk_adjustments(symbol, final_decision[1])
+        final_decision, final_confidence = max(action_confidences.items(), key=lambda x: x[1])
         # Enhanced logging for confidence
         conf_logger = get_trading_logger('ConfidenceManager')
         log_confidence(conf_logger, symbol, {
@@ -13076,7 +13073,7 @@ class ProductionConfidenceManager:
             'components': {'base': final_confidence}
         }) 
         
-        return final_decision[0], final_confidence
+        return final_decision, final_confidence
     
     def _get_adaptive_weights(self, symbol: str, sources: list) -> dict:
         """Get adaptive weights based on recent performance of each signal source"""
@@ -19730,8 +19727,8 @@ class EnhancedTradingBot:
                         logger.warning(f" [RL Strategy] {symbol}: data khng d ({len(df_features) if df_features is not None else 0} candles)")
                         print(f"   [RL Strategy]  {symbol}: data khng d ({len(df_features) if df_features is not None else 0} candles)")
                         # Try to get cached data as fallback
-                        if hasattr(self.bot, 'data_manager') and hasattr(self.bot.data_manager, 'get_cached_data'):
-                            cached_data = self.bot.data_manager.get_cached_data(symbol)
+                        if hasattr(self, 'data_manager') and hasattr(self.data_manager, 'get_cached_data'):
+                            cached_data = self.data_manager.get_cached_data(symbol)
                             if cached_data is not None and len(cached_data) >= 50:
                                 live_data_cache[symbol] = cached_data
                                 logger.info(f"[RL Strategy] Using cached data for {symbol}: {len(cached_data)} candles")
@@ -19781,6 +19778,11 @@ class EnhancedTradingBot:
                         df_features_for_pred = pd.DataFrame(df_features_array, columns=feature_columns, index=df_features.index)
                         # EnsembleModel chreceive 1 tham s(DataFrame)
                         prob_buy = ensemble_model.predict_proba(df_features_for_pred)
+                        # Ensure prob_buy is a scalar value
+                        if hasattr(prob_buy, '__len__') and len(prob_buy) > 0:
+                            prob_buy = prob_buy[0] if hasattr(prob_buy[0], '__len__') else prob_buy[0]
+                        elif hasattr(prob_buy, 'item'):
+                            prob_buy = prob_buy.item()
                     except Exception as e:
                         logging.error(f"Prediction failed for {symbol}: {e}")
                         # Fallback: Using confidence old Or gi trmc dnh data nh
@@ -20126,7 +20128,7 @@ class EnhancedTradingBot:
                         logger.info(f"   - Adaptive Threshold: {adaptive_threshold:.2%}")
                         
                         # Check confidence threshold
-                        if final_confidence >= adaptive_threshold and final_decision != "HOLD":
+                        if final_confidence >= adaptive_threshold:
                             logger.info(f"[RL Strategy] Creating task: {final_decision} {symbol_to_act} with confidence {final_confidence:.2%}")
                             tasks.append(self.handle_position_logic(symbol_to_act, final_decision, final_confidence))
                         else:
