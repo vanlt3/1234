@@ -18842,7 +18842,20 @@ class EnhancedTradingBot:
         if force_retrain_symbols is None:
             force_retrain_symbols = []
 
-        # <<< TreceiveANG M I: Check symbols needs retrain do stale data >>>
+        # <<< NEW: Check if models exist, if not force retrain all >>>
+        missing_models = []
+        for symbol in SYMBOLS:
+            trending_model = load_latest_model(symbol, "ensemble_trending")
+            ranging_model = load_latest_model(symbol, "ensemble_ranging")
+            if not trending_model or not ranging_model:
+                missing_models.append(symbol)
+        
+        if missing_models:
+            print(f"🚨 [Auto-Train] No models found for {len(missing_models)} symbols: {missing_models}")
+            print(f"🔄 [Auto-Train] Will train models for all missing symbols...")
+            force_retrain_symbols.extend(missing_models)
+
+        # <<< ORIGINAL: Check symbols needs retrain do stale data >>>
         stale_symbols = self.data_manager.get_stale_symbols()
         if stale_symbols:
             print(f"🔄 [Auto-Retrain] Detected {len(stale_symbols)} symbols need retraining due to stale data: {stale_symbols}")
@@ -19016,13 +19029,17 @@ class EnhancedTradingBot:
             print(f"   - trending_model c: {symbol in self.trending_models}")
             print(f"   - ranging_model c: {symbol in self.ranging_models}")
 
-            if is_symbol_active:
+            # Special handling for crypto symbols - always activate if market is open
+            if is_symbol_active or (is_crypto_symbol(symbol) and is_market_open(symbol)):
                 self.active_symbols.add(symbol)
-                print(f"  Symbol {symbol} has been activated.")
+                if is_symbol_active:
+                    print(f"  ✅ Symbol {symbol} has been activated (with models).")
+                else:
+                    print(f"  🔄 Symbol {symbol} activated as crypto (fallback mode - will train models later).")
             else:
                 self.trending_models.pop(symbol, None)
                 self.ranging_models.pop(symbol, None)
-                print(f"  Symbol {symbol} BV HI U HA do not c model no d t chu n.")
+                print(f"  ⚠️ Symbol {symbol} deactivated - no models meet standards.")
 
 
 
