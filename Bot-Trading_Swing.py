@@ -5617,6 +5617,7 @@ class OnlineLearningManager:
         try:
             final_decision = feedback_data['final_decision']
             final_confidence = feedback_data['final_confidence']
+            symbol = feedback_data['symbol']  # Extract symbol from feedback_data
             # Enhanced logging for confidence
             conf_logger = get_trading_logger('ConfidenceManager')
             log_confidence(conf_logger, symbol, {
@@ -5766,9 +5767,19 @@ class OnlineLearningManager:
         try:
             if symbol not in self.models:
                 return "HOLD", 0.5
+
+            # Check if market data is empty or invalid
+            if market_data is None or (hasattr(market_data, 'empty') and market_data.empty):
+                logging.warning(f"[Online Learning] Empty market data for {symbol}, returning HOLD with default confidence")
+                return "HOLD", 0.5
             
             # Extract features - now returns numpy array
             features = self._extract_features_from_market_data(market_data)
+            
+            # Check if features are all zeros (indicating empty/invalid data)
+            if isinstance(features, np.ndarray) and np.all(features == 0):
+                logging.warning(f"[Online Learning] All-zero features for {symbol}, returning HOLD with default confidence")
+                return "HOLD", 0.5
             
             # Ensure features is properly formatted - features is already numpy array
             if isinstance(features, np.ndarray):
@@ -19711,13 +19722,20 @@ class EnhancedTradingBot:
                     logger.debug(f" [RL Strategy] Fetching data for {symbol}...")
                     print(f"   [RL Strategy] Fetching data for {symbol}...")
                     df_features = self.data_manager.create_enhanced_features(symbol)
-                    if df_features is not None and len(df_features) >= 100:
+                    if df_features is not None and len(df_features) >= 50:  # Reduced threshold from 100 to 50
                         live_data_cache[symbol] = df_features
                         logger.debug(f"[RL Strategy] {symbol}: {len(df_features)} candles")
                         print(f"   [RL Strategy] {symbol}: {len(df_features)} candles")
                     else:
                         logger.warning(f" [RL Strategy] {symbol}: data khng d ({len(df_features) if df_features is not None else 0} candles)")
                         print(f"   [RL Strategy]  {symbol}: data khng d ({len(df_features) if df_features is not None else 0} candles)")
+                        # Try to get cached data as fallback
+                        if hasattr(self.bot, 'data_manager') and hasattr(self.bot.data_manager, 'get_cached_data'):
+                            cached_data = self.bot.data_manager.get_cached_data(symbol)
+                            if cached_data is not None and len(cached_data) >= 50:
+                                live_data_cache[symbol] = cached_data
+                                logger.info(f"[RL Strategy] Using cached data for {symbol}: {len(cached_data)} candles")
+                                print(f"   [RL Strategy] Using cached data for {symbol}: {len(cached_data)} candles")
                 except Exception as e:
                     print(f"   [RL Strategy] {symbol}: Li fetch data - {e}")
                     import traceback
@@ -19774,7 +19792,11 @@ class EnhancedTradingBot:
                     # Add randomness to avoid confidence clustering
                     if prob_buy_smoothed == 0.5:  # if l gi trfallback
                         import random
-                        prob_buy_smoothed = 0.5 + random.uniform(-0.1, 0.1)
+                        # Enhanced randomization for crypto symbols
+                        if symbol in ['BTCUSD', 'ETHUSD']:
+                            prob_buy_smoothed = 0.5 + random.uniform(-0.15, 0.15)
+                        else:
+                            prob_buy_smoothed = 0.5 + random.uniform(-0.1, 0.1)
                         prob_buy_smoothed = np.clip(prob_buy_smoothed, 0.05, 0.95)
                     
                     # Apply uncertainty penalty for extreme predictions
@@ -19795,6 +19817,14 @@ class EnhancedTradingBot:
                         confidence = 0.15 - (0.05 - confidence) * 0.1
                     
                     confidence = np.clip(confidence, 0.1, 0.9)  # Cap between 10% and 90%
+                    
+                    # Market-specific confidence adjustments
+                    if symbol in ['BTCUSD', 'ETHUSD']:
+                        # Crypto symbols get slightly higher confidence range
+                        confidence = np.clip(confidence, 0.15, 0.95)
+                    else:
+                        # Standard range for other symbols
+                        confidence = np.clip(confidence, 0.1, 0.9)
 
                     live_confidences[symbol] = confidence
                     # Quan trng: s dng feature columns d duc sp xp (khng thm confidence) d khp vi training
