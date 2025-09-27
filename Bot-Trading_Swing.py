@@ -19016,13 +19016,17 @@ class EnhancedTradingBot:
             print(f"   - trending_model c: {symbol in self.trending_models}")
             print(f"   - ranging_model c: {symbol in self.ranging_models}")
 
-            if is_symbol_active:
+            # Special handling for crypto symbols - always activate if market is open
+            if is_symbol_active or (is_crypto_symbol(symbol) and is_market_open(symbol)):
                 self.active_symbols.add(symbol)
-                print(f"  Symbol {symbol} has been activated.")
+                if is_symbol_active:
+                    print(f"  ✅ Symbol {symbol} has been activated (with models).")
+                else:
+                    print(f"  🔄 Symbol {symbol} activated as crypto (fallback mode - will train models later).")
             else:
                 self.trending_models.pop(symbol, None)
                 self.ranging_models.pop(symbol, None)
-                print(f"  Symbol {symbol} BV HI U HA do not c model no d t chu n.")
+                print(f"  ⚠️ Symbol {symbol} deactivated - no models meet standards.")
 
 
 
